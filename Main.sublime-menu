@@ -1,0 +1,29 @@
+[
+    {
+        "caption": "Preferences",
+        "mnemonic": "n",
+        "id": "preferences",
+        "children":
+        [
+            {
+                "caption": "Package Settings",
+                "mnemonic": "P",
+                "id": "package-settings",
+                "children":
+                [
+                    {
+                        "caption": "InterSystems Caché",
+                        "children":
+                        [
+                            {
+                                "command": "open_file",
+                                "args": {"file": "${packages}/CacheColors/InterSystemsCache.sublime-settings"},
+                                "caption": "Settings – Default"
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+]

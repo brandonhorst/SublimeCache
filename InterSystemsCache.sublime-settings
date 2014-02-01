@@ -1,0 +1,14 @@
+{
+    "cstud-path": "",
+    "servers": [
+        {
+            "name":"CACHE",
+            "host":"127.0.0.1",
+            "super-server-port":"1972",
+            "username":"_SYSTEM",
+            "password":"SYS",
+            "web-server-port":"57772"
+        }
+    ],
+
+}
