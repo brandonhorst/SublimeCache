@@ -349,7 +349,8 @@ def __main():
     specificationGroup.add_argument('-I', '--instance', type=str, default=None)
     locationGroup = specificationGroup.add_argument_group('location')
     locationGroup.add_argument('-H', '--host', type=str)
-    locationGroup.add_argument('-S', '--port', type=int)
+    locationGroup.add_argument('-S', '--super-server-port', type=int)
+    locationGroup.add_argument('-W', '--web-server-port', type=int)
     mainParser.add_argument('--force-install', action='store_true')
 
     subParsers = mainParser.add_subparsers(help='cstud commands',dest='function')
@@ -394,7 +395,7 @@ def __main():
     if function == 'info':
         info_(**kwargs)
     else:
-        instance = InstanceDetails(kwargs.pop('instance'), kwargs.pop('host'), kwargs.pop('port'))
+        instance = InstanceDetails(kwargs.pop('instance'), kwargs.pop('host'), kwargs.pop('super_server_port'), kwargs.pop('web_server_port'))
         bindings = getPythonBindings(instance,force=kwargs.pop('force_install'))
         credentials = Credentials(kwargs.pop('username'), kwargs.pop('password'), kwargs.pop('namespace'))
         cacheDatabase = Cache(bindings, credentials, instance, kwargs.pop('verbose'))
