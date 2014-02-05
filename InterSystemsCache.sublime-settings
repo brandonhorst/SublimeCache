@@ -1,5 +1,4 @@
 {
-    "cstud-path": "",
     "servers": [
         {
             "name":"CACHE",
@@ -7,8 +6,8 @@
             "super-server-port":"1972",
             "username":"_SYSTEM",
             "password":"SYS",
+            "namespace":"USER",
             "web-server-port":"57772"
         }
-    ],
-
+    ]
 }
