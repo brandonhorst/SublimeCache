@@ -39,7 +39,6 @@ def settings_get(name, default=None):
     return setting
 
 def call_cstud(*args,stdin=None):
-    print(args, stdin)
     pipeStdin = subprocess.PIPE if stdin else None
     communicateArgs = [bytes(stdin,"UTF-8")] if stdin else []
     cstud = subprocess.Popen([sys.executable, '{0}/cstud/cstud.py'.format(os.path.dirname(os.path.realpath(__file__)))] + list(args), stdout=subprocess.PIPE, stdin=pipeStdin)
