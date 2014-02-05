@@ -13,24 +13,30 @@ import threading
 
 signal.signal(signal.SIGPIPE,signal.SIG_DFL) 
 
-def info_(default_location=False, **kwargs):
-    details = InstanceDetails()
-    print(details.location)
+def info_(bindings_location=False, **kwargs):
+    if bindings_location:
+        details = InstanceDetails()
+        print(details.latest_location)
 
 class InstanceDetails:
-    def __init__(self, instanceName="", host="", port=0, location=""):
+    def __init__(self, instanceName="", host="", super_server_port=0, web_server_port=0):
         if not instanceName:
             instanceName = self.getDefaultCacheInstanceName()
 
         ccontrol = subprocess.Popen(['ccontrol', 'qlist'],stdout=subprocess.PIPE)
         stdout = ccontrol.communicate()[0]
         instanceStrings = stdout.decode('UTF-8').split('\n')
+        maxVersion = 0
         for instanceString in instanceStrings:
             instanceArray = instanceString.split('^')
             if instanceName.upper() == instanceArray[0]:
                 self.host = '127.0.0.1'
-                self.port = int(instanceArray[5])
-                self.location = instanceArray[1]
+                versionInt = self.convertVersionToInteger(instanceArray[2])
+                if versionInt > maxVersion:
+                    maxVersion = versionInt
+                    self.latest_location = instanceArray[1]
+                self.super_server_port = int(instanceArray[5])
+                self.web_server_port = int(instanceArray[6])
                 break
         else:
             print("Invalid Instance Name: %s".format('instanceName'))
@@ -38,15 +44,21 @@ class InstanceDetails:
 
         if host:
             self.host = host
-        if port:
-            self.port = port
-        if location:
-            self.location = location
+        if super_server_port:
+            self.super_server_port = super_server_port
+        if web_server_port:
+            self.web_server_port = web_server_port
 
     def getDefaultCacheInstanceName(self):
         ccontrol = subprocess.Popen(['ccontrol', 'default'],stdout=subprocess.PIPE)
         stdout = ccontrol.communicate()[0]
         return stdout.decode('UTF-8').split('\n')[0]
+
+    def convertVersionToInteger(self,version):
+        splitVersion = version.split('.')
+        splitVersion += ['']*(5-len(splitVersion))
+        paddedArray = [num.zfill(4) for num in splitVersion]
+        return int(''.join(paddedArray))
 
 class Credentials:
     def __init__(self, username, password, namespace):
@@ -67,7 +79,7 @@ def getPythonBindings(instanceDetails,force):
             changedIt = False
         return changedIt
 
-    binDirectory = os.path.join(instanceDetails.location,'bin')
+    binDirectory = os.path.join(instanceDetails.latest_location,'bin')
     if sys.platform.startswith('linux'):
         libraryPath = 'LD_LIBRARY_PATH'
     elif sys.platform == 'darwin':
@@ -83,10 +95,10 @@ def getPythonBindings(instanceDetails,force):
             raise ImportError
         import intersys.pythonbind3
     except ImportError:
-        installerDirectory = os.path.join(instanceDetails.location, 'dev', 'python')
+        installerDirectory = os.path.join(instanceDetails.latest_location, 'dev', 'python')
         installerPath = os.path.join(installerDirectory, 'setup3.py')
         installerProcess = subprocess.Popen([sys.executable, installerPath, 'install'], cwd=installerDirectory, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL)
-        installerProcess.communicate(bytes(instanceDetails.location, 'UTF-8'))
+        installerProcess.communicate(bytes(instanceDetails.latest_location, 'UTF-8'))
         import intersys.pythonbind3
 
 
@@ -98,7 +110,7 @@ class Cache:
         self.credentials = credentials
         self.instance = instanceDetails
 
-        url = '%s[%i]:%s' % (self.instance.host, self.instance.port, self.credentials.namespace)
+        url = '%s[%i]:%s' % (self.instance.host, self.instance.super_server_port, self.credentials.namespace)
         conn = bindings.connection()
         conn.connect_now(url, self.credentials.username, self.credentials.password, None)
 
@@ -338,7 +350,6 @@ def __main():
     locationGroup = specificationGroup.add_argument_group('location')
     locationGroup.add_argument('-H', '--host', type=str)
     locationGroup.add_argument('-S', '--port', type=int)
-    locationGroup.add_argument('-D', '--directory', type=str)
     mainParser.add_argument('--force-install', action='store_true')
 
     subParsers = mainParser.add_subparsers(help='cstud commands',dest='function')
@@ -373,7 +384,7 @@ def __main():
     loadWSDLParser.add_argument('urls', nargs='+', type=str, help='specify a URL')
 
     infoParser = subParsers.add_parser('info', help='Get configuration information')
-    infoParser.add_argument('-l','--default-location', action='store_true', help='Print location of default Cache instance')
+    infoParser.add_argument('-l','--bindings-location', action='store_true', help='Print location of latest Cache instance installed')
 
 
     results = mainParser.parse_args()
@@ -383,7 +394,7 @@ def __main():
     if function == 'info':
         info_(**kwargs)
     else:
-        instance = InstanceDetails(kwargs.pop('instance'), kwargs.pop('host'), kwargs.pop('port'), kwargs.pop('directory'))
+        instance = InstanceDetails(kwargs.pop('instance'), kwargs.pop('host'), kwargs.pop('port'))
         bindings = getPythonBindings(instance,force=kwargs.pop('force_install'))
         credentials = Credentials(kwargs.pop('username'), kwargs.pop('password'), kwargs.pop('namespace'))
         cacheDatabase = Cache(bindings, credentials, instance, kwargs.pop('verbose'))
