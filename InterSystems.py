@@ -52,7 +52,7 @@ class InsertText(sublime_plugin.TextCommand):
 
 class DownloadClassOrRoutine(sublime_plugin.ApplicationCommand):
     def download(self,index):
-        if index >= 0
+        if index >= 0:
             name = self.items[index]
             results = call_cstud('download',name)
             view = sublime.active_window().new_file()
@@ -60,5 +60,3 @@ class DownloadClassOrRoutine(sublime_plugin.ApplicationCommand):
     def run(self):
         self.items = call_cstud('list').split('\n')
         sublime.active_window().show_quick_panel(self.items,self.download)
-        
-
