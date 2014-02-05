@@ -2,5 +2,9 @@
     {
         "caption": "Cache: Download Class or Routine",
         "command": "download_class_or_routine"
+    },
+    {
+        "caption": "Cache: Upload and Compile Class or Routine",
+        "command": "upload_class_or_routine"
     }
 ]

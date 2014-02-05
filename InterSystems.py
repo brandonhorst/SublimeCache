@@ -38,9 +38,12 @@ def settings_get(name, default=None):
     setting = project_settings.get(name, plugin_settings.get(name, default))
     return setting
 
-def call_cstud(*args):
-    cstud = subprocess.Popen([sys.executable, '{0}/cstud/cstud.py'.format(os.path.dirname(os.path.realpath(__file__)))] + list(args), stdout=subprocess.PIPE)
-    return cstud.communicate()[0].decode('UTF-8')
+def call_cstud(*args,stdin=None):
+    print(args, stdin)
+    pipeStdin = subprocess.PIPE if stdin else None
+    communicateArgs = [bytes(stdin,"UTF-8")] if stdin else []
+    cstud = subprocess.Popen([sys.executable, '{0}/cstud/cstud.py'.format(os.path.dirname(os.path.realpath(__file__)))] + list(args), stdout=subprocess.PIPE, stdin=pipeStdin)
+    return cstud.communicate(*communicateArgs)[0].decode('UTF-8')
 
 bindingsPath = path_get()
 os.environ['PATH'] = "{0}:{1}/bin".format(os.environ['PATH'],bindingsPath)
@@ -60,3 +63,9 @@ class DownloadClassOrRoutine(sublime_plugin.ApplicationCommand):
     def run(self):
         self.items = call_cstud('list').split('\n')
         sublime.active_window().show_quick_panel(self.items,self.download)
+
+class UploadClassOrRoutine(sublime_plugin.ApplicationCommand):
+    def run(self):
+        view = sublime.active_window().active_view()
+        text = view.substr(sublime.Region(0, view.size()))
+        call_cstud('upload', '-', stdin=text)
