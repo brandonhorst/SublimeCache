@@ -18,15 +18,16 @@ Current version: 0.0.3
     - Default: `_SYSTEM`
 * `-P, --password` - the password for the Caché user.
     - Default: `SYS`
+* `-N, --namespace` - the Namespace to work in.
 * `-V` - verbose output.
 
-Additionally, you need to specify either an Instance Name, or a Hostname/Port/Directory:
+Additionally, you need to specify either an Instance Name, or a Hostname/Ports:
         
 * `-I, --instance` - the instance name of a local cache instance.
     - Default: the results of `ccontrol default`
 * `-H, --host` - the host name or IP Address of the Caché server.
-* `-S, --port` - the SuperServer port number of the Caché server.
-* `-D, --directory` - the Caché install directory. 
+* `-S, --super-server-port` - the SuperServer port number of the Caché server.
+* `-W, --web-server-port` - the Web Server port number of the Caché server.
 
 ###`COMMAND`s and `COMMAND_ARGUMENTS`
 
