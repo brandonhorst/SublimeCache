@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25" zv="Cache for UNIX (Apple Mac OS X for x86-64) 2014.2 (Build 135U)" ts="2013-11-20 19:26:31">
+<Routine name="TestTextServices" type="MAC" languagemode="0" timestamp="63146,68894.519256"><![CDATA[
+TestTextServices
+	w #
+	kill
+	s results = ##class(%SQL.Statement).%ExecDirect(,"SELECT Name FROM %Dictionary.ClassDefinition WHERE NOT Name %STARTSWITH '%'")
+	while results.%Next() {
+		s className = results.%Get("Name")
+		s sc = $$Try(className)
+	}
+
+Try(className)
+	w className, !
+	s sc = ##class(%Compiler.UDL.TextServices).GetTextAsStream(,className,.stream)
+	
+	s sc = ##class(%Compiler.UDL.TextServices).SetTextFromStream(,className,stream)
+	w sc, !!!
+	q:'sc sc
+]]></Routine>
+</Export>
