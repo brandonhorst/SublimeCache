@@ -6,5 +6,13 @@
     {
         "caption": "Cache: Upload and Compile Class or Routine",
         "command": "upload_class_or_routine"
-    }
+    },
+    {
+        "caption": "Cache: Change Namespace",
+        "command": "change_cache_namespace"
+    },
+    {
+        "caption": "Cache: Change Server",
+        "command": "change_cache_instance"
+    },
 ]
