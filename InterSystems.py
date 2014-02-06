@@ -29,7 +29,7 @@ def call_cstud(*args,stdin=None):
     if not server:
         sublime.error_message("Cache Servers configured improperly")
         return None
-    defaultArgs = [sys.executable, '{0}/cstud/cstud.py'.format(os.path.dirname(os.path.realpath(__file__))),
+    defaultArgs = [sys.executable, '{0}/cstud/cstud.py'.format(os.path.dirname(os.path.realpath(__file__))), '-V',
                    '-U', server['username'],
                    '-P', server['password'],
                    '-H', server['host'],
@@ -41,7 +41,7 @@ def call_cstud(*args,stdin=None):
     communicateArgs = [bytes(stdin,"UTF-8")] if stdin else []
     cstud = subprocess.Popen(defaultArgs + list(args), stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=pipeStdin)
     stdout,stderr = cstud.communicate(*communicateArgs)
-    print(stderr)
+    print(stdout, stderr)
     return stdout.decode('UTF-8')
 
 def path_get():
@@ -63,7 +63,8 @@ class DownloadClassOrRoutine(sublime_plugin.ApplicationCommand):
             view = sublime.active_window().new_file()
             view.run_command('insert_text',{'text':results})
     def run(self):
-        self.items = call_cstud('list').split('\n')
+        self.items = call_cstud('list', 'classes').split('\n')
+        self.items += call_cstud('list', 'routines').split('\n')
         sublime.active_window().show_quick_panel(self.items,self.download)
 
 class UploadClassOrRoutine(sublime_plugin.ApplicationCommand):
