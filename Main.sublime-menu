@@ -17,7 +17,7 @@
                         [
                             {
                                 "command": "open_file",
-                                "args": {"file": "${packages}/CacheColors/InterSystemsCache.sublime-settings"},
+                                "args": {"file": "${packages}/SublimeCache/InterSystemsCache.sublime-settings"},
                                 "caption": "Settings – Default"
                             }
                         ]

@@ -106,5 +106,5 @@ class ChangeCacheInstance(sublime_plugin.ApplicationCommand):
             
     def run(self):
         servers = settings_get('servers', default=[])
-        self.items = [serverName.upper() for serverName in servers.keys()]
-        sublime.active_window().show_quick_panel(self.items,self.change)
+        self.items = [key for key in servers.keys()]
+        sublime.active_window().show_quick_panel([item.upper() for item in self.items],self.change)
