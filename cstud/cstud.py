@@ -13,46 +13,81 @@ import threading
 
 signal.signal(signal.SIGPIPE,signal.SIG_DFL) 
 
+class CstudException(Exception):
+    def __init__(self,code,value):
+        self.code = code
+        self.value = value
+    def __str__(self):
+        return "cstud Error #{0}: {1}".format(self.code,self.value)
+
 def info_(bindings_location=False, **kwargs):
     if bindings_location:
         details = InstanceDetails()
         print(details.latest_location)
 
 class InstanceDetails:
-    def __init__(self, instanceName="", host="", super_server_port=0, web_server_port=0):
-        if not instanceName:
+    def __init__(self, instanceName=None, host=None, super_server_port=None, web_server_port=None):
+        localInstances = self.getLocalInstances()
+
+        if not instanceName and not host and not super_server_port and not web_server_port:
             instanceName = self.getDefaultCacheInstanceName()
 
-        ccontrol = subprocess.Popen(['ccontrol', 'qlist'],stdout=subprocess.PIPE)
-        stdout = ccontrol.communicate()[0]
-        instanceStrings = stdout.decode('UTF-8').split('\n')
-        maxVersion = 0
-        for instanceString in instanceStrings:
-            instanceArray = instanceString.split('^')
-            if instanceName.upper() == instanceArray[0]:
-                self.host = '127.0.0.1'
-                versionInt = self.convertVersionToInteger(instanceArray[2])
-                if versionInt > maxVersion:
-                    maxVersion = versionInt
-                    self.latest_location = instanceArray[1]
-                self.super_server_port = int(instanceArray[5])
-                self.web_server_port = int(instanceArray[6])
-                break
-        else:
-            print("Invalid Instance Name: %s".format('instanceName'))
-            quit(1)
+        if instanceName:
+            instance = self.getThisInstance(localInstances,instanceName)
+            host = '127.0.0.1'
+            super_server_port = instance['super_server_port']
+            web_server_port = instance['web_server_port']
 
-        if host:
-            self.host = host
-        if super_server_port:
-            self.super_server_port = super_server_port
-        if web_server_port:
-            self.web_server_port = web_server_port
+        self.latest_location = self.getLatestLocation(localInstances)
+        self.host = host
+        self.super_server_port = int(super_server_port)
+        self.web_server_port = int(web_server_port)
+
+
+    def getLocalInstances(self):
+        try: 
+            ccontrol = subprocess.Popen(['ccontrol', 'qlist'],stdout=subprocess.PIPE)
+            stdout = ccontrol.communicate()[0]
+            instanceStrings = stdout.decode('UTF-8').split('\n')
+
+            localInstances = []
+            for instanceString in instanceStrings:
+                if instanceString:
+                    instanceArray = instanceString.split('^')
+                    trueInstanceArray = instanceArray[0:3] + instanceArray[5:7]
+                    instance = dict(zip(['name','location','version','super_server_port','web_server_port'],trueInstanceArray))
+                    localInstances += [instance]
+            return localInstances
+        except FileNotFoundError:
+            raise CstudException(103,"ccontrol not on PATH")
+        except:
+            raise CstudException(201,"ccontrol qlist output not expected")
+
+
+    def getThisInstance(self,localInstances,instanceName):
+        for instance in localInstances:
+            if instance['name'] == instanceName.upper():
+                return instance
+        else:
+            raise CstudException(102,"Invalid Instance Name: {0}".format(instanceName.upper()))
+
+    def getLatestLocation(self,localInstances):
+        maxVersion = 0
+        maxLocation = ""
+        for instance in localInstances:
+            versionInt = self.convertVersionToInteger(instance['version'])
+            if versionInt > maxVersion:
+                maxVersion = versionInt
+                maxLocation = instance['location']
+        return maxLocation
 
     def getDefaultCacheInstanceName(self):
-        ccontrol = subprocess.Popen(['ccontrol', 'default'],stdout=subprocess.PIPE)
-        stdout = ccontrol.communicate()[0]
-        return stdout.decode('UTF-8').split('\n')[0]
+        try:
+            ccontrol = subprocess.Popen(['ccontrol','default'],stdout=subprocess.PIPE)
+            stdout = ccontrol.communicate()[0]
+            return stdout.decode('UTF-8').split('\n')[0]
+        except FileNotFoundError:
+            raise CstudException(103,"ccontrol not on PATH")
 
     def convertVersionToInteger(self,version):
         splitVersion = version.split('.')
@@ -66,20 +101,20 @@ class Credentials:
         self.password = password
         self.namespace = namespace
 
-def getPythonBindings(instanceDetails,force):
+def getPythonBindings(latest_location,force):
 
     #Returns True if it was not already there, false if it was
     def addToEnvPath(env,location):
         changedIt = True
         if not os.environ.get(env):
-            os.environ[env] = ":"+location
+            os.environ[env] = location
         elif not location in os.environ.get(env):
             os.environ[env] += ":"+location
         else:
             changedIt = False
         return changedIt
 
-    binDirectory = os.path.join(instanceDetails.latest_location,'bin')
+    binDirectory = os.path.join(latest_location,'bin')
     if sys.platform.startswith('linux'):
         libraryPath = 'LD_LIBRARY_PATH'
     elif sys.platform == 'darwin':
@@ -95,12 +130,14 @@ def getPythonBindings(instanceDetails,force):
             raise ImportError
         import intersys.pythonbind3
     except ImportError:
-        installerDirectory = os.path.join(instanceDetails.latest_location, 'dev', 'python')
-        installerPath = os.path.join(installerDirectory, 'setup3.py')
-        installerProcess = subprocess.Popen([sys.executable, installerPath, 'install'], cwd=installerDirectory, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL)
-        installerProcess.communicate(bytes(instanceDetails.latest_location, 'UTF-8'))
-        import intersys.pythonbind3
-
+        try:
+            installerDirectory = os.path.join(latest_location, 'dev', 'python')
+            installerPath = os.path.join(installerDirectory, 'setup3.py')
+            installerProcess = subprocess.Popen([sys.executable, installerPath, 'install'], cwd=installerDirectory, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL)
+            installerProcess.communicate(bytes(latest_location, 'UTF-8'))
+            import intersys.pythonbind3
+        except Exception as ex:
+            raise CstudException(301, 'Error installing Python Bindings: {0}'.format(ex))
 
     return intersys.pythonbind3
 
@@ -112,7 +149,10 @@ class Cache:
 
         url = '%s[%i]:%s' % (self.instance.host, self.instance.super_server_port, self.credentials.namespace)
         conn = bindings.connection()
-        conn.connect_now(url, self.credentials.username, self.credentials.password, None)
+        try:
+            conn.connect_now(url, self.credentials.username, self.credentials.password, None)
+        except Exception as ex:
+            raise CstudException(401, 'Unable to connect to Cache: {0}'.format(ex))
 
         self.database = bindings.database(conn)
         self.verbosity = verbosity
@@ -279,39 +319,48 @@ class Cache:
         [thread.start() for thread in threads]
         [thread.join() for thread in threads]
 
-    def listClasses(self,system):
-        sql = 'SELECT Name FROM %Dictionary.ClassDefinition'
-        if not system:
-            sql = sql + " WHERE NOT Name %STARTSWITH '%'"
+    ### accepts runQuery("SELECT * FROM SAMPLE.PERSON") or runQuery("%SYS.Namespace::List")
+    def runQuery(self, sqlOrName):
         query = self.pythonbind.query(self.database)
-        sql_code = query.prepare(sql)
+        if '::' in sqlOrName:
+            query.prepare_class(*sqlOrName.split('::'))
+        else:
+            query.prepare(sqlOrName)
         sql_code = query.execute()
+        results = []
         while True:
             cols = query.fetch([None])
             if len(cols) == 0: break
-            print(cols[0])
+            results.append(cols)
+        return results
+
+    def listClasses(self,system):
+        sql = 'SELECT Name FROM %Dictionary.ClassDefinition'
+        results = self.runQuery(sql)
+        [print(col[0]) for col in results]
 
     def listRoutines(self,type,system):
         sql = "SELECT Name FROM %Library.Routine_RoutineList('*.{0},%*.{0}',1,0)".format(type)
-        if not system:
-            sql = sql + " WHERE NOT Name %STARTSWITH '%'"
-        query = self.pythonbind.query(self.database)
-        sql_code = query.prepare(sql)
-        sql_code = query.execute()
-        while True:
-            cols = query.fetch([None])
-            if len(cols) == 0: break
-            print(cols[0])
+        results = self.runQuery(sql)
+        [print(col[0]) for col in results]
 
+    def listNamespaces(self):
+        sql = '%SYS.Namespace::List'
+        results = self.runQuery(sql)
+        [print(col[0]) for col in results]
 
-    def list_(self,types,system):
-        if types == None:
-            types = ['cls','mac','int','inc','bas']
-        for theType in types:
-            if theType.lower() == 'cls':
-                self.listClasses(system)
-            else:
+    def list_(self,listFunction,types=None,system=False):
+        if listFunction == 'classes':
+            self.listClasses(system)
+            
+        elif listFunction == 'routines':
+            if types == None:
+                types = ['mac','int','inc','bas']
+            for theType in types:
                 self.listRoutines(theType,system)
+
+        elif listFunction == 'namespaces':
+            self.listNamespaces()
 
     def export_(self,names,output=None):
         namesWithCommas = ",".join(names)
@@ -359,7 +408,6 @@ def __main():
     uploadParser.add_argument("files", metavar="F", type=argparse.FileType('r'), nargs="+", help="files to upload")
 
     downloadParser = subParsers.add_parser('download', help='Download classes or routines')
-    # downloadParser.add_argument('-n','--routineName',type=str,help='name for uploaded routines')
     downloadParser.add_argument("names", metavar="N", type=str, nargs="+", help="Classes or routines to download")
 
     importParser = subParsers.add_parser('import', help='Upload and compile classes or routines')
@@ -377,9 +425,17 @@ def __main():
     editParser = subParsers.add_parser('edit', help='Download classes')
     editParser.add_argument("names", metavar="N", type=str, nargs="+", help="Classes or routines to edit")
 
-    listParser = subParsers.add_parser('list', help='List all classes and routines in namespace')
-    listParser.add_argument('-t','--type',action='append',help='cls|mac|int|obj|inc|bas',dest="types",choices=['cls','obj','mac','int','inc','bas'])
-    listParser.add_argument('-s','--noSystem',action='store_false', help='hide system classes',dest="system")
+    listParser = subParsers.add_parser('list', help='list server details')
+    listSubParsers = listParser.add_subparsers(help='list options',dest='listFunction')
+
+    listClassesParser = listSubParsers.add_parser('classes', help='List all classes and routines in namespace')
+    listClassesParser.add_argument('-s','--noSystem',action='store_false', help='hide system classes',dest="system")
+
+    listClassesParser = listSubParsers.add_parser('routines', help='List all classes and routines in namespace')
+    listClassesParser.add_argument('-t','--type',action='append',help='mac|int|obj|inc|bas',dest="types",choices=['obj','mac','int','inc','bas'])
+    listClassesParser.add_argument('-s','--noSystem',action='store_false', help='hide system classes',dest="system")
+
+    listNamespacesParser = listSubParsers.add_parser('namespaces', help='List all classes and routines in namespace')
 
     loadWSDLParser = subParsers.add_parser('loadWSDL', help='Load a WSDL from a URL or a file, and create classes')
     loadWSDLParser.add_argument('urls', nargs='+', type=str, help='specify a URL')
@@ -396,11 +452,14 @@ def __main():
         info_(**kwargs)
     else:
         instance = InstanceDetails(kwargs.pop('instance'), kwargs.pop('host'), kwargs.pop('super_server_port'), kwargs.pop('web_server_port'))
-        bindings = getPythonBindings(instance,force=kwargs.pop('force_install'))
+        bindings = getPythonBindings(instance.latest_location,force=kwargs.pop('force_install'))
         credentials = Credentials(kwargs.pop('username'), kwargs.pop('password'), kwargs.pop('namespace'))
         cacheDatabase = Cache(bindings, credentials, instance, kwargs.pop('verbose'))
         if function:
             getattr(cacheDatabase,function + '_')(**kwargs)
 
 if __name__ == "__main__":
-    __main()
+    try:
+        __main()
+    except CstudException as ex:
+        print(ex)

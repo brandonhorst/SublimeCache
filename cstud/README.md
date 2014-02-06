@@ -31,7 +31,10 @@ Additionally, you need to specify either an Instance Name, or a Hostname/Ports:
 
 ###`COMMAND`s and `COMMAND_ARGUMENTS`
 
-* `list` - list all available classes in the namespace
+* `list`
+    * `list classes` - list all classes in the namespace
+    * `list routines` - list all routines in the namespace. You can specify a type with the `-t` flag
+    * `list namespaces` - list all namespaces on this instance. It doesn't matter which namespace you call this from.
 * `info` - get information about the configuration
 * `upload` - upload all files specified in `COMMAND_ARGUMENTS` to the Caché server
 * `download` - download all classes specificed in `COMMAND_ARGUMENTS` from the Caché server, and output to stdout
@@ -56,7 +59,7 @@ If the Python 3 bindings are not installed, running cstud will automatically ins
 ##Limitations
 
 * The Caché Python bindings must be installed on the local machine.
-* `cstud` relies on `%Compiler.UDL.TextServices`, which will be added to Caché in version 2014.2. In other words, `cstud` does not run on any currently-released version of Caché. 
+* `cstud` relies on `%Compiler.UDL.TextServices`, which will be added to Caché in version 2014.1. 
 * cstud cannot upload files containing `XData` blocks or `SqlComputeCode`s to Cache running on UNIX. This is a limitation of `%Compiler.UDL.TextServices`
 * At the moment, it has been tested on OS X (Mavericks) and Linux (RHEL 6).
 
