@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
 import argparse
+import contextlib
+import io
 import math
 import os
 import os.path
@@ -9,9 +11,33 @@ import string
 import subprocess
 import sys
 import signal
+import tempfile
 import threading
 
-signal.signal(signal.SIGPIPE,signal.SIG_DFL) 
+if sys.platform == 'win32':
+    import winreg
+else:
+    signal.signal(signal.SIGPIPE,signal.SIG_DFL) 
+
+@contextlib.contextmanager
+def stdout_redirected(to=os.devnull):
+    fd = sys.stdout.fileno()
+
+    with os.fdopen(os.dup(fd), 'w') as old_stdout:
+        sys.stdout.close()
+        os.dup2(to.fileno(), fd)
+        try:
+            yield # allow code to be run with the redirected stdout
+        finally:
+            os.dup2(old_stdout.fileno(), fd)
+            sys.stdout = os.fdopen(fd, 'w')
+
+def capture_output(func,args):
+    tf = tempfile.TemporaryFile()
+    with stdout_redirected(tf):
+        func(*args)
+    tf.seek(0)
+    return str(tf.read(), encoding='UTF-8').split('\r\n')
 
 class CstudException(Exception):
     def __init__(self,code,value):
@@ -43,25 +69,63 @@ class InstanceDetails:
         self.super_server_port = int(super_server_port)
         self.web_server_port = int(web_server_port)
 
+    def iterateOverKey(self,key):
+        i = 0;
+        subKeys = []
+        while True:
+            try:
+                subKey = winreg.EnumKey(key, i)
+                subKeys.append(subKey)
+                i += 1
+            except WindowsError:
+                break
+        return subKeys
+
+    def isWin64(self):
+        return 'PROGRAMFILES(x86)' in os.environ
 
     def getLocalInstances(self):
-        try: 
-            ccontrol = subprocess.Popen(['ccontrol', 'qlist'],stdout=subprocess.PIPE)
-            stdout = ccontrol.communicate()[0]
-            instanceStrings = stdout.decode('UTF-8').split('\n')
-
+        if sys.platform == 'win32':
+            cacheSubKeyName = 'SOFTWARE\\{0}Intersystems\\Cache'.format('Wow6432Node\\' if self.isWin64() else '')
+            configsSubKeyName = '{0}\\Configurations'.format(cacheSubKeyName)
+            serversSubKeyName = '{0}\\Servers'.format(cacheSubKeyName)
+            configsSubKey = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,configsSubKeyName)
             localInstances = []
-            for instanceString in instanceStrings:
-                if instanceString:
-                    instanceArray = instanceString.split('^')
-                    trueInstanceArray = instanceArray[0:3] + instanceArray[5:7]
-                    instance = dict(zip(['name','location','version','super_server_port','web_server_port'],trueInstanceArray))
-                    localInstances += [instance]
+            instance = {}
+            for instanceName in self.iterateOverKey(configsSubKey):
+                instance['name'] = instanceName
+                instanceSubKeyName = '{0}\\{1}'.format(configsSubKeyName,instanceName)
+                instanceSubKey = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,instanceSubKeyName)
+                instance['version'] = winreg.QueryValueEx(instanceSubKey,'Version')[0]
+                directorySubKeyName = '{0}\\Directory'.format(instanceSubKeyName,instanceName)
+                instance['location'] = winreg.QueryValue(winreg.HKEY_LOCAL_MACHINE,directorySubKeyName)
+                preferredServerSubKeyName = '{0}\\Manager\\PreferredServer'.format(instanceSubKeyName,instanceName)
+                preferredServerName = winreg.QueryValue(winreg.HKEY_LOCAL_MACHINE,preferredServerSubKeyName)
+                if not hasattr(self,'defaultServerName'): self.defaultServerName = preferredServerName #cheating
+                serverSubKeyName = '{0}\\{1}'.format(serversSubKeyName,preferredServerName)
+                serverSubKey = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,serverSubKeyName)
+                instance['super_server_port'] = winreg.QueryValueEx(serverSubKey,'Port')[0]
+                instance['web_server_port'] = winreg.QueryValueEx(serverSubKey,'WebServerPort')[0]
+                localInstances.append(instance)
             return localInstances
-        except FileNotFoundError:
-            raise CstudException(103,"ccontrol not on PATH")
-        except:
-            raise CstudException(201,"ccontrol qlist output not expected")
+        else:
+            try: 
+                ccontrol = subprocess.Popen(['ccontrol', 'qlist'],stdout=subprocess.PIPE)
+                stdout = ccontrol.communicate()[0]
+                instanceStrings = stdout.decode('UTF-8').split('\n')
+
+                localInstances = []
+                for instanceString in instanceStrings:
+                    if instanceString:
+                        instanceArray = instanceString.split('^')
+                        trueInstanceArray = instanceArray[0:3] + instanceArray[5:7]
+                        instance = dict(zip(['name','location','version','super_server_port','web_server_port'],trueInstanceArray))
+                        localInstances += [instance]
+                return localInstances
+            except FileNotFoundError:
+                raise CstudException(103,"ccontrol not on PATH")
+            except:
+                raise CstudException(201,"ccontrol qlist output not expected")
 
 
     def getThisInstance(self,localInstances,instanceName):
@@ -82,12 +146,15 @@ class InstanceDetails:
         return maxLocation
 
     def getDefaultCacheInstanceName(self):
-        try:
-            ccontrol = subprocess.Popen(['ccontrol','default'],stdout=subprocess.PIPE)
-            stdout = ccontrol.communicate()[0]
-            return stdout.decode('UTF-8').split('\n')[0]
-        except FileNotFoundError:
-            raise CstudException(103,"ccontrol not on PATH")
+        if sys.platform == 'win32':
+            return self.defaultServerName
+        else:
+            try:
+                ccontrol = subprocess.Popen(['ccontrol','default'],stdout=subprocess.PIPE)
+                stdout = ccontrol.communicate()[0]
+                return stdout.decode('UTF-8').split('\n')[0]
+            except FileNotFoundError:
+                raise CstudException(103,"ccontrol not on PATH")
 
     def convertVersionToInteger(self,version):
         splitVersion = version.split('.')
@@ -101,7 +168,7 @@ class Credentials:
         self.password = password
         self.namespace = namespace
 
-def getPythonBindings(latest_location,force):
+def getPythonBindingsLEGACY(latest_location,force):
 
     #Returns True if it was not already there, false if it was
     def addToEnvPath(env,location):
@@ -138,6 +205,45 @@ def getPythonBindings(latest_location,force):
             import intersys.pythonbind3
         except Exception as ex:
             raise CstudException(301, 'Error installing Python Bindings: {0}'.format(ex))
+
+    return intersys.pythonbind3
+
+def getPythonBindings(latest_location,force):
+    binDirectory = os.path.join(latest_location,'bin')
+    files = ['libcbind', 'libcppbind','libcacheodbciw']
+    newDir = ''
+
+    if sys.platform.startswith('linux'):
+        newDir = '/usr/lib64'
+        files = [file+".so" for file in files]
+    elif sys.platform == 'darwin':
+        newDir = os.path.join(os.environ['HOME'], 'lib')
+        files = [file+".dylib" for file in files]
+    else:
+        sys.exit("Unsupported Platform")
+
+    if not os.path.isdir(newDir):
+        os.mkdir(newDir)
+    for file in files:
+        newPath = os.path.join(newDir,file)
+        if force or not os.path.isfile(newPath):
+            if os.path.isfile(newPath):
+                os.unlink(newPath)
+            os.symlink(os.path.join(binDirectory,file), newPath)
+
+    try:
+        if force:
+            raise ImportError
+        import intersys.pythonbind3
+    except ImportError:
+        # try:
+        installerDirectory = os.path.join(latest_location, 'dev', 'python')
+        installerPath = os.path.join(installerDirectory, 'setup3.py')
+        installerProcess = subprocess.Popen([sys.executable, installerPath, 'install'], cwd=installerDirectory, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL)
+        installerProcess.communicate(bytes(latest_location, 'UTF-8'))
+        import intersys.pythonbind3
+        # except Exception as ex:
+        #     raise CstudException(301, 'Error installing Python Bindings: {0}'.format(ex))
 
     return intersys.pythonbind3
 
@@ -327,27 +433,22 @@ class Cache:
         else:
             query.prepare(sqlOrName)
         sql_code = query.execute()
-        results = []
         while True:
             cols = query.fetch([None])
             if len(cols) == 0: break
-            results.append(cols)
-        return results
+            yield cols
 
     def listClasses(self,system):
         sql = 'SELECT Name FROM %Dictionary.ClassDefinition'
-        results = self.runQuery(sql)
-        [print(col[0]) for col in results]
+        [print(col[0]) for col in self.runQuery(sql)]
 
     def listRoutines(self,type,system):
         sql = "SELECT Name FROM %Library.Routine_RoutineList('*.{0},%*.{0}',1,0)".format(type)
-        results = self.runQuery(sql)
-        [print(col[0]) for col in results]
+        [print(col[0]) for col in self.runQuery(sql)]
 
     def listNamespaces(self):
         sql = '%SYS.Namespace::List'
-        results = self.runQuery(sql)
-        [print(col[0]) for col in results]
+        [print(col[0]) for col in self.runQuery(sql)]
 
     def list_(self,listFunction,types=None,system=False):
         if listFunction == 'classes':
@@ -385,6 +486,36 @@ class Cache:
     def loadWSDL_(self,urls):
         for url in urls:
             self.loadWSDLFromURL(url)
+
+    def findInFiles(self,term,fileFilter='*.*',system=True,whole_words=False,case_sensitive=False):
+        args = [term, fileFilter, system, whole_words, case_sensitive, 10000]
+        results = capture_output(self.database.run_class_method, ['%Studio.Project','FindInFiles', args])
+        [print(line) for line in results[2:-2]]
+
+    def findInDictionary(self,term,table,class_context=None):
+        sql = "SELECT parent FROM %Dictionary.{0} WHERE Name = '{1}'".format(table,term)
+        if class_context:
+            sql += " AND parent LIKE '%{0}'".format(class_context)
+        [print(row[0]) for row in self.runQuery(sql)]
+
+    def find_(self,term,type=None,class_context=None):
+        if not type:
+            self.findInFiles(term)
+        elif type == 'property':
+            self.findInDictionary(term,'CompiledProperty',class_context)
+        elif type == 'parameter':
+            self.findInDictionary(term,'CompiledParameter',class_context)
+        elif type == 'method':
+            self.findInDictionary(term,'CompiledMethod',class_context)
+        elif type == 'class':
+            self.findInDictionary(term,'CompiledClass')
+        elif type == 'routine':
+            pass
+        elif type == 'macro':
+            pass
+        elif type == 'table':
+            pass
+
 
 
 def __main():
@@ -442,6 +573,11 @@ def __main():
 
     infoParser = subParsers.add_parser('info', help='Get configuration information')
     infoParser.add_argument('-l','--bindings-location', action='store_true', help='Print location of latest Cache instance installed')
+
+    findParser = subParsers.add_parser('find', help='Find things on the server')
+    findParser.add_argument('-t', '--type', type=str, help='property|parameter|method|class|routine|macro|table or blank for all', choices=['property','parameter','method','class','routine','macro','table'])
+    findParser.add_argument('-c', '--class-context', type=str, help='class to search in (applies to property, parameter, and method')
+    findParser.add_argument('term', type=str, help='term to search for')
 
 
     results = mainParser.parse_args()
