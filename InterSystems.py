@@ -1,9 +1,15 @@
-#aponxi
 import sys
 import os
 import subprocess
 import sublime_plugin
 import sublime
+
+cstudPath = '{0}/cstud'.format(os.path.dirname(os.path.realpath(__file__)))
+if cstudPath not in sys.path:
+    sys.path += [cstudPath]
+
+import cstud
+
 
 def settings_get(name, default=None):
     # load up the plugin settings
@@ -32,33 +38,22 @@ def settings_set(name, value):
     plugin_settings.set(name, value)
     sublime.save_settings('InterSystemsCache.sublime-settings')
 
-def call_cstud(*args,stdin=None):
+def load_cstud():
     instanceName = settings_get('current-server')
     servers = settings_get('servers',{})
     server = servers.get(instanceName)
     if not server:
         sublime.error_message("Cache Servers configured improperly")
         return None
-    defaultArgs = [sys.executable, '{0}/cstud/cstud.py'.format(os.path.dirname(os.path.realpath(__file__))), '-V',
-                   '-U', server['username'],
-                   '-P', server['password'],
-                   '-H', server['host'],
-                   '-S', server['super-server-port'],
-                   '-N', server['namespace'],
-                   '-W', server['web-server-port']]
+    return cstud.simple_connect(instance="",**server)
 
-    pipeStdin = subprocess.PIPE if stdin else None
-    communicateArgs = [bytes(stdin,"UTF-8")] if stdin else []
-    cstud = subprocess.Popen(defaultArgs + list(args), stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=pipeStdin)
-    stdout,stderr = cstud.communicate(*communicateArgs)
-    return stdout.decode('UTF-8')
 
-def path_get():
-    return call_cstud("info","-l")
+# def path_get():
+#     return call_cstud("info","-l")
 
-bindingsPath = path_get()
-os.environ['PATH'] = "{0}:{1}/bin".format(os.environ['PATH'],bindingsPath)
-os.environ['DYLD_LIBRARY_PATH'] = "{0}:{1}/bin".format(os.environ['PATH'],bindingsPath)
+# bindingsPath = path_get()
+# os.environ['PATH'] = "{0}:{1}/bin".format(os.environ['PATH'],bindingsPath)
+# os.environ['DYLD_LIBRARY_PATH'] = "{0}:{1}/bin".format(os.environ['PATH'],bindingsPath)
 
 class InsertText(sublime_plugin.TextCommand):
     def run(self,edit,text,isClass,name):
