@@ -46,6 +46,13 @@ class CstudException(Exception):
     def __str__(self):
         return "cstud Error #{0}: {1}".format(self.code,self.value)
 
+def simple_connect(instance_name, host,super_server_port,web_server_port,namespace,username,password,force=False,verbosity=False):
+    instance = InstanceDetails(instance_name, host, super_server_port, web_server_port)
+    bindings = getPythonBindings(instance.latest_location, force=force)
+    credentials = Credentials(username,password,namespace)
+    cacheDatabase = Cache(bindings, credentials, instance, verbosity=verbosity)
+    return cacheDatabase
+
 def info_(bindings_location=False, **kwargs):
     if bindings_location:
         details = InstanceDetails()
@@ -587,12 +594,17 @@ def __main():
     if function == 'info':
         info_(**kwargs)
     else:
-        instance = InstanceDetails(kwargs.pop('instance'), kwargs.pop('host'), kwargs.pop('super_server_port'), kwargs.pop('web_server_port'))
-        bindings = getPythonBindings(instance.latest_location,force=kwargs.pop('force_install'))
-        credentials = Credentials(kwargs.pop('username'), kwargs.pop('password'), kwargs.pop('namespace'))
-        cacheDatabase = Cache(bindings, credentials, instance, kwargs.pop('verbose'))
+        database = simple_connect(kwargs.pop('instance'),
+                       kwargs.pop('host'),
+                       kwargs.pop('super_server_port'),
+                       kwargs.pop('web_server_port'),
+                       kwargs.pop('namespace'),
+                       kwargs.pop('username'),
+                       kwargs.pop('password'),
+                       force=kwargs.pop('force_install'),
+                       verbosity=kwargs.pop('verbose'))
         if function:
-            getattr(cacheDatabase,function + '_')(**kwargs)
+            getattr(database,function + '_')(**kwargs)
 
 if __name__ == "__main__":
     try:
