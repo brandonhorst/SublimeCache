@@ -2,12 +2,12 @@
     "current-server":"cache",
     "servers": {
         "cache": {
-            "host":"127.0.0.1",
-            "super-server-port":"1972",
+            "host":"172.16.196.221",
+            "super_server_port":"1972",
             "username":"_SYSTEM",
             "password":"SYS",
             "namespace":"USER",
-            "web-server-port":"57772"
+            "web_server_port":"57772"
         }
     }
 }

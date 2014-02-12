@@ -4,56 +4,30 @@ import subprocess
 import sublime_plugin
 import sublime
 
-cstudPath = '{0}/cstud'.format(os.path.dirname(os.path.realpath(__file__)))
-if cstudPath not in sys.path:
-    sys.path += [cstudPath]
-
-import cstud
-
-
 def settings_get(name, default=None):
-    # load up the plugin settings
-    plugin_settings = sublime.load_settings('InterSystemsCache.sublime-settings')
-    # project plugin settings? sweet! no project plugin settings? ok, well promote plugin_settings up then
-    if sublime.active_window() and sublime.active_window().active_view():
-        project_settings = sublime.active_window().active_view().settings().get("InterSystemsCache")
-    else:
-        project_settings = {}
+    plugin_settings = sublime.load_settings('InterSystems.sublime-settings')
 
-    # what if this isn't a project?
-    # the project_settings would return None (?)
-    if project_settings is None:
-        project_settings = {}
-
-    setting = project_settings.get(name, plugin_settings.get(name, default))
-    return setting
+    return plugin_settings.get(name,default)
 
 def settings_set(name, value):
-    # load up the plugin settings
-    plugin_settings = sublime.load_settings('InterSystemsCache.sublime-settings')
-    # project plugin settings? sweet! no project plugin settings? ok, well promote plugin_settings up then
-    # if sublime.active_window() and sublime.active_window().active_view():
-    #     project_settings = sublime.active_window().active_view().settings().get("InterSystemsCache")
-
+    plugin_settings = sublime.load_settings('InterSystems.sublime-settings')
     plugin_settings.set(name, value)
     sublime.save_settings('InterSystemsCache.sublime-settings')
 
-def load_cstud():
-    instanceName = settings_get('current-server')
+def update_current_instance():
+    global current_instance
+
+    instance_name = settings_get('current-server')
     servers = settings_get('servers',{})
-    server = servers.get(instanceName)
-    if not server:
-        sublime.error_message("Cache Servers configured improperly")
-        return None
-    return cstud.simple_connect(instance="",**server)
+    server = servers.get(instance_name)
 
+    current_instance = CacheInstance(**server)
 
-# def path_get():
-#     return call_cstud("info","-l")
-
-# bindingsPath = path_get()
-# os.environ['PATH'] = "{0}:{1}/bin".format(os.environ['PATH'],bindingsPath)
-# os.environ['DYLD_LIBRARY_PATH'] = "{0}:{1}/bin".format(os.environ['PATH'],bindingsPath)
+cdevPath = '/Users/brandonhorst/Dropbox/Programming/cdev/client'
+if cdevPath not in sys.path:
+    sys.path += [cdevPath]
+from cdev import CacheInstance
+update_current_instance()
 
 class InsertText(sublime_plugin.TextCommand):
     def run(self,edit,text,isClass,name):
@@ -66,22 +40,21 @@ class DownloadClassOrRoutine(sublime_plugin.ApplicationCommand):
     def download(self,index):
         if index >= 0:
             name = self.items[index]
-            results = call_cstud('download',name)
+            content = current_instance.get_file(name)['content'].replace("\r\n","\n")
             view = sublime.active_window().new_file()
-            isClass = index < self.classCount
-            view.run_command('insert_text',{'text':results,'isClass':isClass,'name':name})
+            # isClass = index < self.classCount
+            view.run_command('insert_text',{'text':content,'isClass':True,'name':name})
     def run(self):
-        classes = call_cstud('list', 'classes').split('\n')
-        routines = call_cstud('list', 'routines').split('\n')
-        self.classCount = len(classes)
-        self.items = classes + routines
+        self.items = current_instance.get_files()
+        # self.classCount = len(classes)
+        # self.items = classes + routines
         sublime.active_window().show_quick_panel(self.items,self.download)
 
 class UploadClassOrRoutine(sublime_plugin.ApplicationCommand):
     def run(self):
         view = sublime.active_window().active_view()
         text = view.substr(sublime.Region(0, view.size()))
-        call_cstud('upload', '-', stdin=text)
+        # call_cstud('upload', '-', stdin=text)
 
 class ChangeCacheNamespace(sublime_plugin.ApplicationCommand):
     def change(self, index):
@@ -90,14 +63,17 @@ class ChangeCacheNamespace(sublime_plugin.ApplicationCommand):
             serverName = settings_get('current-server')
             servers[serverName]['namespace'] = self.items[index]
             settings_set('servers',servers)
+            update_current_instance()
+
     def run(self):
-        self.items = call_cstud('list','namespaces').split('\n')
+        self.items = current_instance.get_namespaces()
         sublime.active_window().show_quick_panel(self.items,self.change)
 
 class ChangeCacheInstance(sublime_plugin.ApplicationCommand):
     def change(self,index):
         if index >= 0:
             settings_set('current-server',self.items[index])
+            update_current_instance()
             
     def run(self):
         servers = settings_get('servers', default=[])
