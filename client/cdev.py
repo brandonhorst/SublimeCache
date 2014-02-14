@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import base64
 import json
 import os
 import sys
@@ -54,11 +55,13 @@ class CacheInstance:
         return self.request(file['generated'])
 
     def _request(self, url, method="GET", data=None):
-        requestData = bytes(data,"UTF-8") if data else None
+        requestData = json.dumps(data).encode() if data else None
         requestHeaders = {'Content-Type':'application/json'} if data else {}
         requestUrl = self.url_prefix + url
+
         if self.username and self.password:
-            requestUrl += "{0}CacheUserName={1}&CachePassword={2}".format('&' if '?' in requestUrl else '?', self.username, self.password)
+            base64string = base64.b64encode('{0}:{1}'.format(self.username, self.password).encode()).decode()
+            requestHeaders["Authorization"] = 'Basic {0}'.format(base64string)
 
         request = urllib.request.Request(
             url = requestUrl,
@@ -66,9 +69,9 @@ class CacheInstance:
             data = requestData,
             method = method
         )
-
+        
         response = urllib.request.urlopen(request)
-        return json.loads(response.read().decode("UTF-8"))
+        return json.loads(response.read().decode())
 
 # if __name__=="__main__":
 #     i = CacheInstance("172.16.196.221", "57772", "USER", "_SYSTEM", "SYS")

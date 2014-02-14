@@ -1,5 +1,6 @@
 Class %CDEV.Server Extends %CSP.REST
 {
+
     XData UrlMap [ XMLNamespace = "http://www.intersystems.com/urlmap" ]
     {
         <Routes>
@@ -58,13 +59,20 @@ ClassMethod GetNamespace(namespace As %String) As %Status
     q $$$OK
 }
 
-ClassMethod GetFile(namespace As %String, filename As %String)
+ClassMethod GetFile(namespace As %String, filename As %String) As %Status
 {
     n $namespace
     s $namespace = namespace
 
-    s classname = $e(filename,1,*-4)
+    s classname = ..FileName(filename)
 
+    s n=$namespace
+    zn "USER"
+    s ^bgh(1)=classname
+    s ^bgh(2) = n
+    s ^bgh(3) = namespace
+    zn n
+    
     if ##class(%Dictionary.ClassDefinition).%ExistsId(classname)
     {
         d ##class(%Compiler.UDL.TextServices).GetTextAsStream(,classname,.classStream) 
@@ -80,7 +88,7 @@ ClassMethod GetFile(namespace As %String, filename As %String)
     q $$$OK
 }
 
-ClassMethod PutFile(namespace As %String, filename As %String)
+ClassMethod PutFile(namespace As %String, filename As %String) As %Status
 {
     n $namespace
     s $namespace = namespace
@@ -89,26 +97,24 @@ ClassMethod PutFile(namespace As %String, filename As %String)
 
     s requestObject = ..GetRequest()
     i $isobject(requestObject.content) {
-        s sc = ##class(%Compiler.UDL.TextServices).SetTextFromStream(,classname,requestObject.content) 
+        s sc = ##class(%Compiler.UDL.TextServices).SetTextFromStream(,classname,requestObject.content.Read()) 
     } else {
         s sc = ##class(%Compiler.UDL.TextServices).SetTextFromString(,classname,requestObject.content) 
     }
 
-    i $$$ISERR(sc) {
-        s %response.Status = "441 Invalid File"
-    } else {
+    i '$$$ISERR(sc) {
         d ..GetFile(namespace, filename)
     }
     q sc
 }
 
-ClassMethod PutNewFile(namespace As %String)
+ClassMethod PutNewFile(namespace As %String) As %Status
 {
     s requestObject = ..GetRequest()
     d ..PutFile(namespace, requestObject.name)
 }
 
-ClassMethod FileAction(namespace As %String, filename As %String)
+ClassMethod FileAction(namespace As %String, filename As %String) As %Status
 {
     n $namespace
     s $namespace = namespace
@@ -134,7 +140,7 @@ ClassMethod FileAction(namespace As %String, filename As %String)
     q $$$OK
 }
 
-ClassMethod GetGenerated(namespace As %String, filename As %String)
+ClassMethod GetGenerated(namespace As %String, filename As %String) As %Status
 {
     s rs = ..DoSQL("")
     s type = ..FileExtension(filename)
@@ -155,11 +161,11 @@ ClassMethod GetGenerated(namespace As %String, filename As %String)
     q $$$OK
 }
 
-ClassMethod FileExtension(filename As %String)
+ClassMethod FileExtension(filename As %String) As %String
 {
     q $p(filename, ".", *)
 }
-ClassMethod FileName(filename As %String)
+ClassMethod FileName(filename As %String) As %String
 {
     q $p(filename, ".", 1, *-1) 
 }
@@ -177,7 +183,7 @@ ClassMethod CreatePath(components...) As %String
     q path
 }
 
-ClassMethod GetClassName(class)
+ClassMethod GetClassName(class) As %String
 {
     if $isobject(class)
     {
