@@ -2,7 +2,7 @@
     "current-server":"cache",
     "servers": {
         "cache": {
-            "host":"172.16.196.221",
+            "host":"localhost",
             "super_server_port":"1972",
             "username":"_SYSTEM",
             "password":"SYS",
