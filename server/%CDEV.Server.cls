@@ -6,6 +6,7 @@ Class %CDEV.Server Extends %CSP.REST
             <Route Url="/namespaces" Method="GET" Call="GetNamespaceList" />
             <Route Url="/namespaces/:namespace" Method="GET" Call="GetNamespace" />
             <Route Url="/namespaces/:namespace/files" Method="GET" Call="GetFileList" />
+            <Route Url="/namespaces/:namespace/files" Method="PUT" Call="PutNewFile" />
             <Route Url="/namespaces/:namespace/files/:filename" Method="GET" Call="GetFile" />
             <Route Url="/namespaces/:namespace/files/:filename" Method="PUT" Call="PutFile" />
             <Route Url="/namespaces/:namespace/files/:filename" Method="POST" Call="FileAction" />
@@ -84,19 +85,27 @@ ClassMethod PutFile(namespace As %String, filename As %String)
     n $namespace
     s $namespace = namespace
 
-    s classname = $e(filename,1,*-4)
+    s classname = ..FileName(filename)
 
-    d ##class(%ZEN.Auxiliary.jsonProvider).%ConvertJSONToObject(%request.Content,,.requestObject)
-    if $isobject(requestObject.content) {
+    s requestObject = ..GetRequest()
+    i $isobject(requestObject.content) {
         s sc = ##class(%Compiler.UDL.TextServices).SetTextFromStream(,classname,requestObject.content) 
     } else {
         s sc = ##class(%Compiler.UDL.TextServices).SetTextFromString(,classname,requestObject.content) 
     }
 
-    if $$$ISERR(sc) {
+    i $$$ISERR(sc) {
         s %response.Status = "441 Invalid File"
+    } else {
+        d ..GetFile(namespace, filename)
     }
     q sc
+}
+
+ClassMethod PutNewFile(namespace As %String)
+{
+    s requestObject = ..GetRequest()
+    d ..PutFile(namespace, requestObject.name)
 }
 
 ClassMethod FileAction(namespace As %String, filename As %String)
@@ -104,8 +113,8 @@ ClassMethod FileAction(namespace As %String, filename As %String)
     n $namespace
     s $namespace = namespace
 
-    s classname = $e(filename,1,*-4)
-    d ##class(%ZEN.Auxiliary.jsonProvider).%ConvertJSONToObject(%request.Content,,.request)
+    s classname = ..FileName(filename)
+    s requestObject = ..GetRequest()
     s result = ##class(%ZEN.proxyObject).%New()
     if request.action = "compile"
     {
@@ -187,6 +196,12 @@ ClassMethod SendJSON(object as %RegisteredObject) As %Status
 {
     s %response.ContentType="application/json"
     d ##class(%ZEN.Auxiliary.jsonProvider).%WriteJSONFromObject(,object)
+}
+
+ClassMethod GetRequest() As %ZEN.proxyObject
+{
+    d ##class(%ZEN.Auxiliary.jsonProvider).%ConvertJSONToObject(%request.Content,,.request)
+    q request
 }
 
 ClassMethod GetListFromSQL(sql as %String) As %ListOfDataTypes
