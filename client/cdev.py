@@ -42,7 +42,7 @@ class CacheInstance:
         self.port = web_server_port
         self.username = username
         self.password = password
-        self.ROOTURL = '/csp/sys/cdev/namespaces'
+        self.ROOTURL = '/csp/sys/dev/namespaces'
 
     @property
     def url_prefix(self):
