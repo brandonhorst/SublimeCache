@@ -1,33 +1,37 @@
+Include %CDEV.JSON.Includes
+
 Class %CDEV.Server Extends %CSP.REST
 {
 
-    XData UrlMap [ XMLNamespace = "http://www.intersystems.com/urlmap" ]
-    {
-        <Routes>
-            <Route Url="/namespaces" Method="GET" Call="GetNamespaceList" />
-            <Route Url="/namespaces/:namespace" Method="GET" Call="GetNamespace" />
-            <Route Url="/namespaces/:namespace/files" Method="GET" Call="GetFileList" />
-            <Route Url="/namespaces/:namespace/files" Method="PUT" Call="PutNewFile" />
-            <Route Url="/namespaces/:namespace/files/:filename" Method="GET" Call="GetFile" />
-            <Route Url="/namespaces/:namespace/files/:filename" Method="PUT" Call="PutFile" />
-            <Route Url="/namespaces/:namespace/files/:filename" Method="POST" Call="FileAction" />
-            <Route Url="/namespaces/:namespace/files/:filename/generated" Method="GET" Call="GetGenerated" />
-        </Routes>
-    } 
+XData UrlMap [ XMLNamespace = "http://www.intersystems.com/urlmap" ]
+{
+<Routes>
+    <Route Url="/namespaces" Method="GET" Call="GetNamespaceList" />
+    <Route Url="/namespaces/:namespace" Method="GET" Call="GetNamespace" />
+    <Route Url="/namespaces/:namespace/files" Method="GET" Call="GetFileList" />
+    <Route Url="/namespaces/:namespace/files" Method="PUT" Call="PutNewFile" />
+    <Route Url="/namespaces/:namespace/files/:filename" Method="GET" Call="GetFile" />
+    <Route Url="/namespaces/:namespace/files/:filename" Method="PUT" Call="PutFile" />
+    <Route Url="/namespaces/:namespace/files/:filename" Method="POST" Call="FileAction" />
+    <Route Url="/namespaces/:namespace/files/:filename/generated" Method="GET" Call="GetGenerated" />
+    <Route Url='/namespaces/:namespace/globals' Method="GET" Call="GetGlobalList" />
+</Routes>
+}
 
 ClassMethod GetNamespaceList() As %Status
 {
     s rs = ..DoSQL("%SYS.Namespace::List")
-    s results = ##class(%ListOfDataTypes).%New()
+    s results = $$$jslist
     while rs.%Next() {
-        s obj = ##class(%ZEN.proxyObject).%New()
+        s obj = $$$jsobj
         s obj.name = rs.%GetData(1)
         s obj.id = ..CreatePath("namespaces", $zcvt(obj.name,"L"))
         s obj.files = obj.id _ "/files"
-        d results.Insert(obj)
+        d results.Append(obj)
     }
 
-    d ..SendJSON(results)
+    s %response.ContentType="application/json"
+    d results.%WriteJSON()
     q $$$OK
 }
 
@@ -36,27 +40,71 @@ ClassMethod GetFileList(namespace As %String) As %Status
     n $namespace
     s $namespace = namespace
 
-    s sql = "SELECT Name||'.CLS' FROM %Dictionary.ClassDefinition"
-    s results = ##class(%ListOfDataTypes).%New()
+    s results = $$$jslist
+
+    s sql = "SELECT Name||'.cls' FROM %Dictionary.ClassDefinition"
     s rs = ..DoSQL(sql)
     while rs.%Next() {
-        s obj = ##class(%ZEN.proxyObject).%New()
+        s obj = $$$jsobj
         s obj.name = rs.%GetData(1)
         s obj.id = ..CreatePath("namespaces", namespace, "files", obj.name)
-        d results.Insert(obj)
+        d results.Append(obj)
+    }
+    s sql = "%Library.Routine::RoutineList"
+    s rs = ..DoSQL(sql)
+    while rs.%Next() {
+        s obj = $$$jsobj
+        s obj.name = ..FileName(rs.%GetData(1)) _ "." _ ..FileExtension(rs.%GetData(1))
+        s obj.id = ..CreatePath("namespaces", namespace, "files", obj.name)
+        d results.Append(obj)
     }
 
-    d ..SendJSON(results)
+    s %response.ContentType="application/json"
+    d results.%WriteJSON()
     q $$$OK
 }
 
 ClassMethod GetNamespace(namespace As %String) As %Status
 {
-    s obj = ##class(%ZEN.proxyObject).%New()
+    s obj = $$$jsobj
     s obj.id = ..CreatePath("namespaces", namespace)
     s obj.files = ..CreatePath("namespaces", namespace, "files")
-    d ..SendJSON(obj)
+
+    s %response.ContentType="application/json"
+    d obj.%WriteJSON()
     q $$$OK
+}
+
+ClassMethod FileObject(namespace As %String, filename As %String) As %CDEV.JSON.Object
+{
+    s result = $$$jsobj
+
+    if ..FileExtension(filename) = "cls"
+    {
+        s displayName = ..FileName(filename)
+        if ##class(%Dictionary.ClassDefinition).%ExistsId(displayName)
+        {
+            d ##class(%Compiler.UDL.TextServices).GetTextAsStream(,displayName,.classStream) 
+            s result.content = $$$jsstream(classStream)
+        } else {
+            q ""
+        }
+    } else {
+        s displayName = filename
+        i ##class(%Routine).Exists(filename)
+        {
+            s routine = ##class(%Routine).%OpenId(filename)
+            s result.content = $$$jsstream(routine)
+        } else {
+            q ""
+        }
+    }
+
+    s result.id = ..CreatePath("namespaces", namespace, "files", filename)
+    s result.generatedfiles = result.id _ "/generated"
+    s result.name = displayName
+    s result.url = ..GetURLForClass(displayName)
+    q result
 }
 
 ClassMethod GetFile(namespace As %String, filename As %String) As %Status
@@ -64,27 +112,9 @@ ClassMethod GetFile(namespace As %String, filename As %String) As %Status
     n $namespace
     s $namespace = namespace
 
-    s classname = ..FileName(filename)
+    s result = ..FileObject(namespace, filename)
 
-    s n=$namespace
-    zn "USER"
-    s ^bgh(1)=classname
-    s ^bgh(2) = n
-    s ^bgh(3) = namespace
-    zn n
-    
-    if ##class(%Dictionary.ClassDefinition).%ExistsId(classname)
-    {
-        d ##class(%Compiler.UDL.TextServices).GetTextAsStream(,classname,.classStream) 
-        s result = ##class(%ZEN.proxyObject).%New()
-        s result.id = ..CreatePath("namespaces", namespace, "files", filename)
-        s result.generated = result.id _ "/generated"
-        s result.name = classname
-        s result.content = classStream
-        d ..SendJSON(result)
-    } else {
-        s %response.Status = "440 File Not Found"
-    }
+    d result.%WriteJSON()
     q $$$OK
 }
 
@@ -93,25 +123,58 @@ ClassMethod PutFile(namespace As %String, filename As %String) As %Status
     n $namespace
     s $namespace = namespace
 
-    s classname = ..FileName(filename)
-
     s requestObject = ..GetRequest()
-    i $isobject(requestObject.content) {
-        s sc = ##class(%Compiler.UDL.TextServices).SetTextFromStream(,classname,requestObject.content.Read()) 
+
+    if ..FileExtension(filename) = "cls"
+    {
+        s displayName = ..FileName(filename)
+        i $isobject(requestObject.content)
+        {
+            s sc = ##class(%Compiler.UDL.TextServices).SetTextFromStream(,displayName,requestObject.content.Read()) 
+        } else {
+            s sc = ##class(%Compiler.UDL.TextServices).SetTextFromString(,displayName,requestObject.content) 
+        }
     } else {
-        s sc = ##class(%Compiler.UDL.TextServices).SetTextFromString(,classname,requestObject.content) 
+        s trueName = ..FileName(filename) _ "." _ $zcvt(..FileExtension(filename), "U")
+        s displayName = filename
+        if ##class(%Routine).Exists(trueName)
+        {
+            s routine = ##class(%Routine).%OpenId(trueName)
+            d routine.Clear()
+        } else {
+            s routine = ##class(%Routine).%New(trueName)
+        }
+        i $isobject(requestObject.content)
+        {
+            d routine.CopyFrom(requestObject.content)
+        } else {
+            d routine.Write(requestObject.content)
+        }
+        s sc = routine.%Save()
     }
 
-    i '$$$ISERR(sc) {
-        d ..GetFile(namespace, filename)
+
+    s result = $$$jsobj
+    k ^bgh
+    s ^bgh = sc
+    i $$$ISERR(sc)
+    {
+        s result.success = $$$jsfalse
+        s result.errors = $$DecomposeStatus^%apiOBJ(sc)
+    } else {
+        s result.success = $$$jstrue
+        s result.name = displayName
+        s result.file = ..FileObject(namespace, filename)
     }
-    q sc
+    s %response.ContentType="application/json"
+    d result.%WriteJSON()
+    q $$$OK
 }
 
 ClassMethod PutNewFile(namespace As %String) As %Status
 {
     s requestObject = ..GetRequest()
-    d ..PutFile(namespace, requestObject.name)
+    q ..PutFile(namespace, requestObject.name)
 }
 
 ClassMethod FileAction(namespace As %String, filename As %String) As %Status
@@ -120,54 +183,82 @@ ClassMethod FileAction(namespace As %String, filename As %String) As %Status
     s $namespace = namespace
 
     s classname = ..FileName(filename)
-    s requestObject = ..GetRequest()
-    s result = ##class(%ZEN.proxyObject).%New()
+    s request = ..GetRequest()
+    s result = $$$jsobj
     if request.action = "compile"
     {
         d $system.OBJ.Compile(classname, request.spec_"-d", .errorlog)
         i errorlog {
-            s result.success = 0
-            s result.errors = ##class(%ListOfDataTypes).%New()
+            s result.success = $$$jsfalse
+            s result.errors = $$$jslist
             f i=1:1:errorlog
             {
-                d result.errors.Insert(errorlog(i))
+                d result.errors.Append(errorlog(i))
             }
         } else {
-            s result.success = 1
+            s result.success = $$$jstrue
         }
     }
-    d ..SendJSON(result)
+    s result.file = ..FileObject(namespace, filename)
+    s %response.ContentType="application/json"
+    d result.%WriteJSON()
     q $$$OK
 }
 
 ClassMethod GetGenerated(namespace As %String, filename As %String) As %Status
 {
+    n $namespace
+    s $namespace = namespace
+    
     s rs = ..DoSQL("")
-    s type = ..FileExtension(filename)
+    s type = $zcvt(..FileExtension(filename),"U")
     s file = ..FileName(filename)
-    s results = ##class(%ListOfDataTypes).%New()
+    s results = $$$jslist
     s genFileList = ##class(%RoutineMgr).GetOther(file,type)
     i $l(genFileList)
     {
         f i=1:1:$l(genFileList, ",")
         {
-            s obj = ##class(%ZEN.proxyObject).%New()
-            s obj.name = $p(genFileList, ",", i)
+            s obj = $$$jsobj
+            s name = $p(genFileList, ",", i)
+            s obj.name = ..FileName(name) _ "." _ $zcvt(..FileExtension(name),"L")
             s obj.id = ..CreatePath("namespaces",namespace,"files",obj.name)
-            d results.Insert(obj)
+            d results.Append(obj)
         }
     }
-    d ..SendJSON(results)
+    s %response.ContentType="application/json"
+    d results.%WriteJSON()
+    q $$$OK
+}
+
+ClassMethod GetGlobalList(namespace As %String)
+{
+    n $namespace
+    s $namespace = namespace
+
+    s sql = "SELECT Name||'.CLS' FROM %Dictionary.ClassDefinition"
+    s results = $$$jslist
+    s rs = ..DoSQL(sql)
+    while rs.%Next() {
+        s obj = $$$jsobj
+        s obj.name = rs.%GetData(1)
+        s obj.id = ..CreatePath("namespaces", namespace, "files", obj.name)
+        d results.Append(obj)
+    }
+
+    s %response.ContentType="application/json"
+    d results.%WriteJSON()
     q $$$OK
 }
 
 ClassMethod FileExtension(filename As %String) As %String
 {
-    q $p(filename, ".", *)
+    q $zcvt($p(filename, ".", *), "L")
 }
+
 ClassMethod FileName(filename As %String) As %String
 {
-    q $p(filename, ".", 1, *-1) 
+    q $p(filename, ".", 1, *-1)
 }
 
 ClassMethod CreatePath(components...) As %String
@@ -183,22 +274,7 @@ ClassMethod CreatePath(components...) As %String
     q path
 }
 
-ClassMethod GetClassName(class) As %String
-{
-    if $isobject(class)
-    {
-        //This banks on there not being 32k documentation, which is probably safe
-        s firstPart = class.Read()
-    } else {
-        s firstPart = class
-    }
-    s regexString = "\nClass\s((\w|\.)+)\s" 
-    s regex = ##class(%Regex.Matcher).%New(regexString,firstPart)
-    d regex.Locate()
-    q regex.Group(1)_".CLS"
-}
-
-ClassMethod SendJSON(object as %RegisteredObject) As %Status
+ClassMethod SendJSON(object As %RegisteredObject) As %Status
 {
     s %response.ContentType="application/json"
     d ##class(%ZEN.Auxiliary.jsonProvider).%WriteJSONFromObject(,object)
@@ -206,27 +282,13 @@ ClassMethod SendJSON(object as %RegisteredObject) As %Status
 
 ClassMethod GetRequest() As %ZEN.proxyObject
 {
+    d %request.Content.Rewind()
     d ##class(%ZEN.Auxiliary.jsonProvider).%ConvertJSONToObject(%request.Content,,.request)
     q request
 }
 
-ClassMethod GetListFromSQL(sql as %String) As %ListOfDataTypes
-{
-    set result = ##class(%ListOfDataTypes).%New()
-    s st = ##class(%SQL.Statement).%New()
-    if $find(sql,"::") {
-        d st.%PrepareClassQuery($p(sql,"::",1), $p(sql,"::",2))
-    } else {
-        d st.%Prepare(sql)
-    }
-    s rs = st.%Execute()
-    while rs.%Next() {
-        d result.Insert(rs.%GetData(1))
-    }
-    q result
-}
 
-ClassMethod DoSQL(sql as %String) As %SQL.StatementResult
+ClassMethod DoSQL(sql As %String, args...) As %SQL.StatementResult
 {
     s st = ##class(%SQL.Statement).%New()
     if $find(sql,"::") {
@@ -234,8 +296,21 @@ ClassMethod DoSQL(sql as %String) As %SQL.StatementResult
     } else {
         d st.%Prepare(sql)
     }
-    s x = st.%Execute()
+    s x = st.%Execute(args...)
     q x
 }
 
+ClassMethod GetURLForClass(classname As %String) As %String
+{
+    s classNamespace = $namespace
+    n $namespace
+    s $namespace = "%SYS"
+
+    s rs = ..DoSQL("SELECT %ID FROM Security.Applications WHERE NameSpace=?", classNamespace)
+    s cspapp = rs.%GetData(1)
+
+    q cspapp _ classname _ ".cls"
 }
+
+}
+
