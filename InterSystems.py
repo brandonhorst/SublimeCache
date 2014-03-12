@@ -1,4 +1,4 @@
-import cdev
+from .cdev import cdev
 
 import json
 import os
@@ -16,7 +16,7 @@ def settings_get(name, default=None, file='InterSystems.sublime-settings'):
 
 def settings_set(name, value, file='InterSystems.sublime-settings'):
     plugin_settings = sublime.load_settings(file)
-    plugin_settings.set(name, value)
+    plugin_settings.set(name, value )
     sublime.save_settings(file)
 
 def cache_name(name, namespace_specific = False):
