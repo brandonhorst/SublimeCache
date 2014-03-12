@@ -23,4 +23,18 @@
         "caption": "Cache: Open In Browser",
         "command": "open_in_browser"
     },
+    {
+        "caption": "Cache: Server Configuration Settings",
+        "command": "open_file",
+        "args": {
+            "file": "${packages}/User/InterSystems.sublime-settings"
+        }
+    },
+    {
+        "caption": "Cache: Default Server Configuration Settings",
+        "command": "open_file",
+        "args": {
+            "file": "${packages}/SublimeCache/InterSystems.sublime-settings"
+        }
+    }
 ]
