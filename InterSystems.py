@@ -1,3 +1,6 @@
+import cdev
+
+import json
 import os
 import re
 import sys
@@ -5,73 +8,106 @@ import subprocess
 import sublime_plugin
 import sublime
 import threading
+import webbrowser
 
-cdevPath = '/Users/brandonhorst/Dropbox/Programming/cdev/client'
-if cdevPath not in sys.path:
-    sys.path += [cdevPath]
-from cdev import CacheInstance
+def settings_get(name, default=None, file='InterSystems.sublime-settings'):
+    plugin_settings = sublime.load_settings(file)
+    return plugin_settings.get(name, default)
 
-def settings_get(name, default=None):
-    plugin_settings = sublime.load_settings('InterSystems.sublime-settings')
-
-    return plugin_settings.get(name,default)
-
-def settings_set(name, value):
-    plugin_settings = sublime.load_settings('InterSystems.sublime-settings')
+def settings_set(name, value, file='InterSystems.sublime-settings'):
+    plugin_settings = sublime.load_settings(file)
     plugin_settings.set(name, value)
-    sublime.save_settings('InterSystemsCache.sublime-settings')
+    sublime.save_settings(file)
+
+def cache_name(name, namespace_specific = False):
+    if namespace_specific:
+        return "{0}{1}{2}{3}".format(name, current_instance().host, current_instance().port, current_namespace().name)
+    else:
+        return "{0}{1}{2}".format(name, current_instance().host, current_instance().port)
+
+def cache_get(name, default=None, namespace_specific = False):
+    cacheName = cache_name(name, namespace_specific)
+
+    return settings_get(cacheName, default, 'InterSystemsCache.sublime-settings')
+
+def cache_set(name, value, namespace_specific = False):
+    cacheName = cache_name(name, namespace_specific)
+
+    settings_set(cacheName, value, 'InterSystemsCache.sublime-settings')
 
 def current_namespace():
-    instance_name = settings_get('current-server')
-    servers = settings_get('servers',{})
-    server = servers.get(instance_name)
-
-    current_namespace_name = server['namespace']
-    return current_instance().get_namespace(current_namespace_name)
+    namespace = cache_get("Namespace",{})
+    if len(namespace):
+        return cdev.Namespace(namespace)
+    else:
+        sublime.active_window().run_command('change_cache_namespace', current_namespace)
 
 def current_instance():
     instance_name = settings_get('current-server')
     servers = settings_get('servers',{})
     server = servers.get(instance_name)
 
-    del server['namespace']
-    return CacheInstance(**server)
+    return cdev.CacheInstance(**server)
 
 class InsertText(sublime_plugin.TextCommand):
     def run(self,edit,text,isClass,name):
         self.view.erase(edit, sublime.Region(0, self.view.size()))
         self.view.insert(edit,0,text.replace("\r\n","\n"))
         self.view.set_name(name)
-        syntaxFile = "UDL" if isClass else "COS"
-        self.view.set_syntax_file('Packages/CacheColors/{0}.tmLanguage'.format(syntaxFile))
+        self.view.set_syntax_file('Packages/CacheColors/{0}.tmLanguage'.format("UDL" if isClass else "COS"))
+        self.view.set_scratch(True)
 
 class DownloadClassOrRoutine(sublime_plugin.ApplicationCommand):
-    def download(self,index):
-        if index >= 0:
-            file = self.files[index]
-            content = current_instance().get_file(file)['content']
-            view = sublime.active_window().new_file()
-            view.run_command('insert_text',{'text':content,'isClass': True, 'name': file['name']})
-            view.settings().set('file',file)
     def run(self):
         threading.Thread(target=self.go).start()
 
     def go(self):
-        self.files = current_instance().get_files(current_namespace())
-        sublime.active_window().show_quick_panel([file['name'] for file in self.files], self.download)
+        self.cached_files = [cdev.File(file) for file in cache_get('Files', [], True)]
+        if len(self.cached_files):
+            sublime.active_window().show_quick_panel([file.name for file in self.cached_files], self.download)
+        #Update the Cache
+        files = current_instance().get_files(current_namespace())
+        if not len(self.cached_files):
+            self.cached_files = files
+            sublime.active_window().show_quick_panel([file.name for file in self.cached_files], self.download)
+        cache_set('Files', [vars(file) for file in files], True)
+
+    def download(self,index):
+        if index >= 0:
+            file_stub = self.cached_files[index]
+            file = current_instance().get_file(file_stub)
+            view = sublime.active_window().new_file()
+            isClass = file.name.endswith('.cls')
+            view.run_command('insert_text',{'text':file.content,'isClass': isClass, 'name': file.name})
+            view.settings().set('file',vars(file))
+
 
 class UploadClassOrRoutine(sublime_plugin.ApplicationCommand):
     def get_class_name(self):
-        match = re.search(r"^Class\s((\w|\.)+)\s", self.text, re.MULTILINE)
+        match = re.search(r"^Class\s((\%|[a-zA-Z])(\w|\.)+)\s", self.text, re.MULTILINE)
         return match.group(1)
 
-    def update(self,newFile):
-        self.view.settings().set('file',newFile)
-        self.view.run_command('insert_text', {'text': newFile['content'], 'isClass': True, 'name': newFile['name']} )
+    def compile(self, new_file):
+        result = current_instance().compile_file(new_file,"ck")
+        if result.success:
+            sublime.status_message("Compiled {0}".format(result.file.name))
+            return True
+        else:
+            panel = view.window().show_panel("output")
+            panel.run_command('insert_text', {'text': result.errors, 'isClass': False, 'name': 'Compilation Results'})
+            return False
+
+    def update(self,result):
+        if result.success:
+            success = self.compile(result.file)
+            if success:
+                self.view.settings().set('file',vars(result.file))
+                isClass = result.file.name.endswith('.cls')
+                self.view.run_command('insert_text', {'text': result.file.content, 'isClass': isClass, 'name': result.file.name} )
 
     def take_name(self, name):
-        new_file = current_instance().add_file(current_namespace(), name, self.text)
-        self.update(nweFile)
+        result = current_instance().add_file(current_namespace(), name, self.text)
+        self.update(result)
 
     def run(self):
         threading.Thread(target=self.go).start()
@@ -80,33 +116,41 @@ class UploadClassOrRoutine(sublime_plugin.ApplicationCommand):
         self.view = sublime.active_window().active_view()
         self.text = self.view.substr(sublime.Region(0, self.view.size())).replace('\n','\r\n')
         
-        file = self.view.settings().get('file')
-        if file:
-            file['content'] = self.text
-            new_file = current_instance().put_file(file)
-            self.update(new_file)
+        file_dict = self.view.settings().get('file', None)
+        if file_dict:
+            file = cdev.File(file_dict)
+            file.content = self.text
+            result = current_instance().put_file(file)
+            self.update(result)
         else:
             class_name = self.get_class_name()
             if class_name:
-                new_file = current_instance().add_file(current_namespace(), class_name, self.text)
-                self.update(newFile)
+                result = current_instance().add_file(current_namespace(), class_name, self.text)
+                self.update(result)
             else:
                 self.view.window().show_input_panel("Enter a name for this routine", "", self.take_name)
+
+class OpenInBrowser(sublime_plugin.TextCommand):
+    def run(self, edit):
+        file = self.view.settings_get('file')
+        if file and 'url' in file:
+            webbrowser.open("http://{0}:{1}}{2}".format(current_instance().host, current_instance().port, file['url']))
 
 class ChangeCacheNamespace(sublime_plugin.ApplicationCommand):
     def change(self, index):
         if index >= 0:
-            servers = settings_get('servers',{})
-            serverName = settings_get('current-server')
-            servers[serverName]['namespace'] = self.namespaces[index]['name']
-            settings_set('servers',servers)
+            cache_set('Namespace', vars(self.namespaces[index]))
+            if self.callback:
+                self.callback()
 
-    def run(self):
+
+    def run(self, callback = None):
+        self.callback = callback
         threading.Thread(target=self.go).start()
 
     def go(self):
         self.namespaces = current_instance().get_namespaces()
-        sublime.active_window().show_quick_panel([namespace['name'] for namespace in self.namespaces], self.change)
+        sublime.active_window().show_quick_panel([namespace.name for namespace in self.namespaces], self.change)
 
 class ChangeCacheInstance(sublime_plugin.ApplicationCommand):
     def change(self,index):

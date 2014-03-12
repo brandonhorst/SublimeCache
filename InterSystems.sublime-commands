@@ -15,4 +15,8 @@
         "caption": "Cache: Change Server",
         "command": "change_cache_instance"
     },
+    {
+        "caption": "Cache: Open In Browser",
+        "command": "open_in_browser"
+    },
 ]
