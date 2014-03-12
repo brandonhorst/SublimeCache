@@ -8,6 +8,10 @@
         "command": "upload_class_or_routine"
     },
     {
+        "caption": "Cache: Open Generated Files",
+        "command": "open_generated_files"
+    },
+    {
         "caption": "Cache: Change Namespace",
         "command": "change_cache_namespace"
     },

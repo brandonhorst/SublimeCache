@@ -57,6 +57,14 @@ class InsertText(sublime_plugin.TextCommand):
         self.view.set_syntax_file('Packages/CacheColors/{0}.tmLanguage'.format("UDL" if isClass else "COS"))
         self.view.set_scratch(True)
 
+def download_file(file_stub):
+    file = current_instance().get_file(file_stub)
+    view = sublime.active_window().new_file()
+    isClass = file.name.endswith('.cls')
+    view.run_command('insert_text',{'text':file.content,'isClass': isClass, 'name': file.name})
+    view.settings().set('file',vars(file))
+
+
 class DownloadClassOrRoutine(sublime_plugin.ApplicationCommand):
     def run(self):
         threading.Thread(target=self.go).start()
@@ -75,11 +83,7 @@ class DownloadClassOrRoutine(sublime_plugin.ApplicationCommand):
     def download(self,index):
         if index >= 0:
             file_stub = self.cached_files[index]
-            file = current_instance().get_file(file_stub)
-            view = sublime.active_window().new_file()
-            isClass = file.name.endswith('.cls')
-            view.run_command('insert_text',{'text':file.content,'isClass': isClass, 'name': file.name})
-            view.settings().set('file',vars(file))
+            download_file(file_stub)
 
 
 class UploadClassOrRoutine(sublime_plugin.ApplicationCommand):
@@ -161,3 +165,23 @@ class ChangeCacheInstance(sublime_plugin.ApplicationCommand):
         servers = settings_get('servers', default=[])
         self.items = [key for key in servers.keys()]
         sublime.active_window().show_quick_panel([item.upper() for item in self.items],self.change)
+
+class OpenGeneratedFiles(sublime_plugin.TextCommand):
+    def go(self):
+        view_file = self.view.settings().get('file', None)
+        if view_file:
+            file = cdev.File(view_file)
+            compile_result = current_instance().compile_file(file, 'ck-u')
+            if compile_result.success:
+                self.files = current_instance().get_generated_files(compile_result.file)
+                if len(self.files):
+                    sublime.active_window().show_quick_panel([file.name for file in self.files], self.download)
+
+    def download(self,index):
+        if index >= 0:
+            file_stub = self.files[index]
+            download_file(file_stub)
+
+
+    def run(self, edit):
+        threading.Thread(target=self.go).start()
