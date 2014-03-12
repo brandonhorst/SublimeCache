@@ -14,7 +14,8 @@ XData UrlMap [ XMLNamespace = "http://www.intersystems.com/urlmap" ]
     <Route Url="/namespaces/:namespace/files/:filename" Method="PUT" Call="PutFile" />
     <Route Url="/namespaces/:namespace/files/:filename" Method="POST" Call="FileAction" />
     <Route Url="/namespaces/:namespace/files/:filename/generated" Method="GET" Call="GetGenerated" />
-    <Route Url='/namespaces/:namespace/globals' Method="GET" Call="GetGlobalList" />
+    <Route Url="/namespaces/:namespace/globals" Method="GET" Call="GetGlobalList" />
+    <Route Url="/namespaces/:namespace/globals/:globalname" Method="GET" Call="GetGlobal" />
 </Routes>
 }
 
@@ -75,7 +76,7 @@ ClassMethod GetNamespace(namespace As %String) As %Status
     q $$$OK
 }
 
-ClassMethod FileObject(namespace As %String, filename As %String) As %CDEV.JSON.Object
+ClassMethod FileObject(filename As %String) As %CDEV.JSON.Object
 {
     s result = $$$jsobj
 
@@ -112,7 +113,7 @@ ClassMethod GetFile(namespace As %String, filename As %String) As %Status
     n $namespace
     s $namespace = namespace
 
-    s result = ..FileObject(namespace, filename)
+    s result = ..FileObject(filename)
 
     d result.%WriteJSON()
     q $$$OK
@@ -155,8 +156,6 @@ ClassMethod PutFile(namespace As %String, filename As %String) As %Status
 
 
     s result = $$$jsobj
-    k ^bgh
-    s ^bgh = sc
     i $$$ISERR(sc)
     {
         s result.success = $$$jsfalse
@@ -164,7 +163,7 @@ ClassMethod PutFile(namespace As %String, filename As %String) As %Status
     } else {
         s result.success = $$$jstrue
         s result.name = displayName
-        s result.file = ..FileObject(namespace, filename)
+        s result.file = ..FileObject(filename)
     }
     s %response.ContentType="application/json"
     d result.%WriteJSON()
@@ -199,7 +198,7 @@ ClassMethod FileAction(namespace As %String, filename As %String) As %Status
             s result.success = $$$jstrue
         }
     }
-    s result.file = ..FileObject(namespace, filename)
+    s result.file = ..FileObject(filename)
     s %response.ContentType="application/json"
     d result.%WriteJSON()
     q $$$OK
@@ -235,14 +234,36 @@ ClassMethod GetGlobalList(namespace As %String)
 {
     n $namespace
     s $namespace = namespace
-
-    s sql = "SELECT Name||'.CLS' FROM %Dictionary.ClassDefinition"
     s results = $$$jslist
-    s rs = ..DoSQL(sql)
-    while rs.%Next() {
+    s global = ""
+    f
+    {
+        s global = $o(^$g(global))
+        q:global=""
         s obj = $$$jsobj
-        s obj.name = rs.%GetData(1)
-        s obj.id = ..CreatePath("namespaces", namespace, "files", obj.name)
+        s obj.name = $e(global,2,999)
+        s obj.id = ..CreatePath("namespaces", namespace, "globals", obj.name)
+        d results.Append(obj)
+    }
+
+    s %response.ContentType="application/json"
+    d results.%WriteJSON()
+    q $$$OK
+}
+
+ClassMethod GetGlobalList(namespace As %String)
+{
+    n $namespace
+    s $namespace = namespace
+    s results = $$$jslist
+    s global = ""
+    f
+    {
+        s global = $o(^$g(global))
+        q:global=""
+        s obj = $$$jsobj
+        s obj.name = $e(global,2,999)
+        s obj.id = ..CreatePath("namespaces", namespace, "globals", obj.name)
         d results.Append(obj)
     }
 

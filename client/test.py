@@ -6,7 +6,7 @@ import cdev
 
 class TestCDEVServer(unittest.TestCase):
     def setUp(self):
-        self.instance = cdev.CacheInstance('172.16.198.149', '57772', '_SYSTEM', 'SYS')
+        self.instance = cdev.CacheInstance('bigfoot', 57776, '_SYSTEM', 'SYS')
     def test_classes_and_routines(self):
         namespaces = self.instance.get_namespaces()
         self.assertIn('SAMPLES', [namespace.name for namespace in namespaces]) 

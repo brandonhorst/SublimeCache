@@ -19,22 +19,21 @@ class Namespace:
     def __init__(self, obj):
         self.id = obj['id']
         self.name = obj['name']
-        self.filesurl = obj['files']
+        self.files = obj['files']
 
 class File:
     def __init__(self, obj):
         self.id = obj['id']
         self.name = obj['name']
-        self.content = obj.get('content')
-        self.generatedurl = obj.get('generatedfiles')
-        self.url = obj.get('url')
+        if 'content' in obj: self.content = obj['content']
+        if 'generatedfiles' in obj: self.generatedfiles = obj['generatedfiles']
+        if 'url' in obj: self.url = obj['url']
 
 class FileOperation:
     def __init__(self, obj):
         self.success = obj['success']
-        self.errors = obj.get('errors')
-        if 'file' in obj:
-            self.file = File(obj['file'])
+        if 'errors' in obj: self.errors = obj['errors']
+        if 'file' in obj: self.file = File(obj['file'])
 
 class CacheInstance:
     def __init__(self, host, web_server_port, username, password):
@@ -74,7 +73,7 @@ class CacheInstance:
 
     def get_files(self,namespace):
         """ returns: [ File ] 'content' key not included """
-        files = self._request(namespace.filesurl)
+        files = self._request(namespace.files)
         return [File(file) for file in files]
 
     def get_file(self, file):
@@ -96,7 +95,7 @@ class CacheInstance:
                 filecontent: str # content (UDL or Routine). Line endings will be automatically converted to \r\n. Class name must match filename.
             returns: File """
         data = { 'name': filename, 'content': filecontent }
-        result = self._request(namespace.filesurl, "PUT", data)
+        result = self._request(namespace.files, "PUT", data)
         return FileOperation(result)
 
     def compile_file(self, file, spec=""):
@@ -111,8 +110,11 @@ class CacheInstance:
     def get_generated_files(self,file):
         """ accepts: File
             returns: [ File ] 'content' key not included """
-        files = self._request(file.generatedurl)
-        return [File(file) for file in files]
+        if hasattr(file, 'generatedfiles'):
+            files = self._request(file.generatedfiles)
+            return [File(file) for file in files]
+        else:
+            return []
 
 
     def _request(self, url, method="GET", data=None):
