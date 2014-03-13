@@ -20,20 +20,39 @@ class Namespace:
         self.id = obj['id']
         self.name = obj['name']
         self.files = obj['files']
+        self.xml = obj['xml']
 
-class File:
+class CodeEntity:
     def __init__(self, obj):
         self.id = obj['id']
-        self.name = obj['name']
         if 'content' in obj: self.content = obj['content']
+
+class File(CodeEntity):
+    def __init__(self, obj):
+        super().__init__(obj)
+        self.name = obj['name']
         if 'generatedfiles' in obj: self.generatedfiles = obj['generatedfiles']
         if 'url' in obj: self.url = obj['url']
+        if 'xml' in obj: self.xml = obj['xml']
 
-class FileOperation:
+class XML(CodeEntity):
+    def __init__(self, obj):
+        super().__init__(obj)
+
+class Operation:
     def __init__(self, obj):
         self.success = obj['success']
         if 'errors' in obj: self.errors = obj['errors']
+
+class FileOperation(Operation):
+    def __init__(self, obj):
+        super().__init__(obj)
         if 'file' in obj: self.file = File(obj['file'])
+
+class XMLOperation(Operation):
+    def __init__(self, obj):
+        super().__init__(obj)
+        if 'xml' in obj: self.xml = XML(obj['xml'])
 
 class CacheInstance:
     def __init__(self, host, web_server_port, username, password):
@@ -116,6 +135,19 @@ class CacheInstance:
         else:
             return []
 
+    def get_xml(self, file):
+        xml = self._request(file.xml)
+        return XML(xml)
+
+    def put_xml(self, xml):
+        data = { 'content': xml.content }
+        result = self._request(xml.id, "PUT", data)
+        return XMLOperation(result)
+
+    def add_xml(self, namespace, content):
+        data = { 'content': content }
+        result = self._request(namespace.xml, "PUT", data)
+        return XMLOperation(result)
 
     def _request(self, url, method="GET", data=None):
         if data and hasattr(data,'__dict__'):
