@@ -34,7 +34,7 @@
         "caption": "Cache: Default Server Configuration Settings",
         "command": "open_file",
         "args": {
-            "file": "${packages}/SublimeCache/InterSystems.sublime-settings"
+            "file": "${packages}/InterSystems Cache/InterSystems.sublime-settings"
         }
     }
 ]
