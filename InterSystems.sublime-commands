@@ -1,10 +1,10 @@
 [
     {
-        "caption": "Cache: Download Class or Routine",
+        "caption": "Cache: Download File",
         "command": "download_class_or_routine"
     },
     {
-        "caption": "Cache: Upload and Compile Class or Routine",
+        "caption": "Cache: Upload and Compile File",
         "command": "upload_class_or_routine"
     },
     {
@@ -22,6 +22,14 @@
     {
         "caption": "Cache: Open In Browser",
         "command": "open_in_browser"
+    },
+    {
+        "caption": "Cache: Load XML and Download File",
+        "command": "load_xml"
+    },
+    {
+        "caption": "Cache: Export File to XML",
+        "command": "export_xml"
     },
     {
         "caption": "Cache: Server Configuration Settings",
