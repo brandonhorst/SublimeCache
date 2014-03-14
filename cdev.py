@@ -53,6 +53,7 @@ class XMLOperation(Operation):
     def __init__(self, obj):
         super().__init__(obj)
         if 'xml' in obj: self.xml = XML(obj['xml'])
+        if 'file' in obj: self.file = File(obj['file'])
 
 class CacheInstance:
     def __init__(self, host, web_server_port, username, password):
