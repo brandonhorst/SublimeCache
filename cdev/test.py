@@ -57,9 +57,11 @@ class TestCDEVServer(unittest.TestCase):
 
         personxmlresult = self.instance.put_xml(personxml)
         self.assertTrue(personxmlresult.success)
+        self.assertEquals(personxmlresult.file.name, "Sample.Person.cls")
 
         anonxmlresult = self.instance.add_xml(samples, personxml.content)
         self.assertTrue(anonxmlresult.success)
+        self.assertEqual(anonxmlresult.file.name, "Sample.Person.cls")
 
 if __name__=='__main__':
     unittest.main()
