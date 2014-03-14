@@ -52,5 +52,14 @@ class TestCDEVServer(unittest.TestCase):
         int = self.instance.get_file(intfile)
         self.assertIn('Sample.CDEVPerson.1', int.content)
 
+        personxml = self.instance.get_xml(person)
+        self.assertIn('Sample.Person', personxml.content)
+
+        personxmlresult = self.instance.put_xml(personxml)
+        self.assertTrue(personxmlresult.success)
+
+        anonxmlresult = self.instance.add_xml(samples, personxml.content)
+        self.assertTrue(anonxmlresult.success)
+
 if __name__=='__main__':
     unittest.main()
