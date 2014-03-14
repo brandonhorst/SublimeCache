@@ -185,3 +185,11 @@ class OpenGeneratedFiles(sublime_plugin.TextCommand):
 
     def run(self, edit):
         threading.Thread(target=self.go).start()
+
+class LoadXML(sublime_plugin.TextCommand):
+    def go(self):
+        self.text = self.view.substr(sublime.Region(0, self.view.size())).replace('\n','\r\n')
+        current_instance().add_xml(current_namespace(), self.text)
+
+    def run(self, edit):
+        threading.Thread(target=self.go).start()
