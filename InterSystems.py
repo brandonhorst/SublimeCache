@@ -50,7 +50,7 @@ def current_instance():
     return cdev.CacheInstance(**server)
 
 class InsertText(sublime_plugin.TextCommand):
-    def run(self,edit,text,isClass,name):
+    def run(self, edit, text, isClass = False, name = None):
         self.view.erase(edit, sublime.Region(0, self.view.size()))
         self.view.insert(edit,0,text.replace("\r\n","\n"))
         self.view.set_name(name)
@@ -166,11 +166,14 @@ class ChangeCacheInstance(sublime_plugin.ApplicationCommand):
         self.items = [key for key in servers.keys()]
         sublime.active_window().show_quick_panel([item.upper() for item in self.items],self.change)
 
+def get_file(view):
+    view_file = view.settings().get('file', None)
+    return cdev.File(view_file) if view_file else None
+
 class OpenGeneratedFiles(sublime_plugin.TextCommand):
     def go(self):
-        view_file = self.view.settings().get('file', None)
-        if view_file:
-            file = cdev.File(view_file)
+        file = get_file(self.view)
+        if file:
             compile_result = current_instance().compile_file(file, 'ck-u')
             if compile_result.success:
                 self.files = current_instance().get_generated_files(compile_result.file)
@@ -186,10 +189,21 @@ class OpenGeneratedFiles(sublime_plugin.TextCommand):
     def run(self, edit):
         threading.Thread(target=self.go).start()
 
-class LoadXML(sublime_plugin.TextCommand):
+class LoadXml(sublime_plugin.TextCommand):
     def go(self):
         self.text = self.view.substr(sublime.Region(0, self.view.size())).replace('\n','\r\n')
-        current_instance().add_xml(current_namespace(), self.text)
+        operation = current_instance().add_xml(current_namespace(), self.text)
+        download_file(operation.file)
+
+    def run(self, edit):
+        threading.Thread(target=self.go).start()
+
+class ExportXml(sublime_plugin.TextCommand):
+    def go(self):
+        file = get_file(self.view)
+        if file:
+            xml = current_instance().get_xml(file)
+            self.view.run_command('insert_text', { 'text':xml.content })
 
     def run(self, edit):
         threading.Thread(target=self.go).start()
