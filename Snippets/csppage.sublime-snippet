@@ -1,0 +1,15 @@
+<snippet>
+	<content><![CDATA[
+<html>
+	<head>
+		<title>${1}</title>
+	</head>
+	<body>
+		${2:Content}
+	</body>
+</html>
+]]></content>
+	<tabTrigger>csppage</tabTrigger>
+	<scope>source.source.isc</scope>
+	<description>CSP Page</description>
+</snippet>

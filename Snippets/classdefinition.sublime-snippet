@@ -1,0 +1,11 @@
+<snippet>
+	<content><![CDATA[
+Class ${1:Package.Class} Extends ${2:%Library.RegisteredObject}
+{
+	
+}
+]]></content>
+	<tabTrigger>class</tabTrigger>
+	<scope>source.source.isc</scope>
+	<description>New Class</description>
+</snippet>

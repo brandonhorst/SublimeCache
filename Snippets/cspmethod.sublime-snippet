@@ -1,0 +1,10 @@
+<snippet>
+	<content><![CDATA[
+<script language="Cache" method="${1}" arguments="${2:arg}:${3:%String}" returntype="${4:%String}">
+	${5}
+</script>
+]]></content>
+	<tabTrigger>cspmethod</tabTrigger>
+	<scope>source.source.isc</scope>
+	<description>CSP Method</description>
+</snippet>

@@ -1,0 +1,29 @@
+<snippet>
+	<content><![CDATA[
+Class ${1:Package.Class} Extends %ZEN.Component.page
+{
+Parameter APPLICATION = "${2};
+
+Parameter PAGENAME = "${3}";
+
+Parameter DOMAIN = "${4}";
+
+XData Style
+{
+<style type="text/css">
+</style>
+}
+
+XData Contents [XMLNamespace="http://www.intersystems.com/zen"]
+{
+<page xmlns="http://www.intersystems.com/zen" title="${5}">
+	${6}
+</page>
+}
+}
+
+]]></content>
+	<tabTrigger>zenpage</tabTrigger>
+	<scope>source.source.isc</scope>
+	<description>New Zen Page</description>
+</snippet>
