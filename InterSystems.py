@@ -89,7 +89,10 @@ class DownloadClassOrRoutine(sublime_plugin.ApplicationCommand):
 class UploadClassOrRoutine(sublime_plugin.ApplicationCommand):
     def get_class_name(self):
         match = re.search(r"^Class\s((\%|[a-zA-Z])(\w|\.)+)\s", self.text, re.MULTILINE)
-        return match.group(1)
+        if match:
+            return match.group(1) + ".cls"
+        else:
+            return None
 
     def compile(self, new_file):
         result = current_instance().compile_file(new_file,"ck")
@@ -110,6 +113,8 @@ class UploadClassOrRoutine(sublime_plugin.ApplicationCommand):
                 self.view.run_command('insert_text', {'text': result.file.content, 'isClass': isClass, 'name': result.file.name} )
 
     def take_name(self, name):
+        if not x[-4] = '.':
+            name += ".mac"
         result = current_instance().add_file(current_namespace(), name, self.text)
         self.update(result)
 
@@ -191,7 +196,7 @@ class OpenGeneratedFiles(sublime_plugin.TextCommand):
 
 class LoadXml(sublime_plugin.TextCommand):
     def go(self):
-        self.text = self.view.substr(sublime.Region(0, self.view.size())).replace('\n','\r\n')
+        self.text = self.view.substr(sublime.Region(0, self.view.size()))
         operation = current_instance().add_xml(current_namespace(), self.text)
         download_file(operation.file)
 
