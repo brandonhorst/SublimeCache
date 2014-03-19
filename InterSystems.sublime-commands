@@ -44,5 +44,12 @@
         "args": {
             "file": "${packages}/InterSystems Cache/InterSystems.sublime-settings"
         }
+    },
+    {
+        "caption": "Cache: Clear Cache",
+        "command": "delete_file",
+        "args": {
+            "files": "${packages}/User/InterSystemsCache.sublime-settings"
+        }
     }
 ]
