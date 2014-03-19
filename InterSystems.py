@@ -92,6 +92,7 @@ class UploadClassOrRoutine(sublime_plugin.ApplicationCommand):
         if match:
             return match.group(1) + ".cls"
         else:
+            match = re.search(r"^;((\%|[a-zA-Z])(\w|\.)+)\s", self.text, re.MULTILINE)
             return None
 
     def compile(self, new_file):
@@ -113,7 +114,7 @@ class UploadClassOrRoutine(sublime_plugin.ApplicationCommand):
                 self.view.run_command('insert_text', {'text': result.file.content, 'isClass': isClass, 'name': result.file.name} )
 
     def take_name(self, name):
-        if not x[-4] = '.':
+        if not x[-4] == '.':
             name += ".mac"
         result = current_instance().add_file(current_namespace(), name, self.text)
         self.update(result)
