@@ -54,7 +54,7 @@ class InsertText(sublime_plugin.TextCommand):
         self.view.erase(edit, sublime.Region(0, self.view.size()))
         self.view.insert(edit,0,text.replace("\r\n","\n"))
         self.view.set_name(name)
-        self.view.set_syntax_file('Packages/CacheColors/{0}.tmLanguage'.format("UDL" if isClass else "COS"))
+        self.view.set_syntax_file('Packages/InterSystems Cache/CacheColors/{0}.tmLanguage'.format("UDL" if isClass else "COS"))
         self.view.set_scratch(True)
 
 def download_file(file_stub):
