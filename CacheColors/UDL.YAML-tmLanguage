@@ -1,0 +1,405 @@
+# [PackageDev] target_format: plist, ext: tmLanguage
+
+# TODO: coloring for method paramters? 
+# TODO: Review syntax categories
+# TODO: enforce order correctly?
+# TODO: color invalid syntax
+# TODO: Triggers aren't always (usually?) COS
+
+fileTypes: [cls]
+firstLineMatch: \s*((?i)Include|Class|///)
+name: "Cach\xE9 Class"
+patterns:
+- {include: '#include-directive'}
+- {include: '#field-comment'}
+- {include: '#class-definition'}
+- begin: \{
+  comment: Class Block
+  end: \}
+  patterns:
+  - {include: '#field-comment'}
+  - {include: '#block-comment'}
+  - {include: '#line-comment'}
+  - {include: '#property-definition'}
+  - {include: '#parameter-definition'}
+  - {include: '#method-definition'}
+  - {include: '#index-definition'}
+  - {include: '#fk-definition'}
+  - {include: text.xml}
+repository:
+  block-comment: 
+    begin: /\*
+    comment: /* */ comments
+    end: \*/
+    name: comment.block.source.isc.udl}
+  block-cos:
+    comment: Cache ObjectScript block
+    begin: \{
+    end: \}
+    patterns:
+    - {include: '#cos'}
+  cos:
+    comment: COS syntax highlighting
+    patterns:
+    - {include: '#block-cos'}
+    - {include: source.isc.cos}
+    - {include: $self}
+  block-js:
+    comment: Javascript method body
+    begin: \{
+    end: \}
+    patterns:
+    - {include: '#js'}
+  js:
+    patterns:
+    - {include: '#block-js'}
+    - {include: source.js}
+    - {include: $self}
+  block-sql:
+    comment: SQL Query block
+    begin: \{
+    end: \}
+    patterns:
+    - {include: source.sql}
+  block-xml:
+    comment: is this an XData block?
+    begin: \{
+    end: \}
+    #name: invalid.illegal.source.isc.udl
+    patterns:
+    - {include: '#xdata-style'}
+    - {include: text.xml}
+  xdata-style:
+    comment: XData Style block for inline ZEN CSS
+    begin: (?<=\<style type=\"text/css\"\>)
+    end: (?=\</style\>)
+    patterns:
+    - {include: source.css}
+  class-definition:
+    comment: Class Definition Line
+    begin: ^\s*((?i)Class)\b
+    end: $
+    beginCaptures:
+      '1': {name: support.class.source.isc.udl}
+    name: illegal.invalid.source.isc.udl
+    patterns:
+    - {include: '#keyword-extends'}
+    - {include: '#member-attr-list'}
+    - {include: '#type-name'}
+  
+  field-comment: 
+    comment: Field comments (triple slash)
+    match: ^\s*///.*$
+    name: comment.block.documentation.source.isc.udl
+  
+  fk-definition: 
+    comment: Foriegn Key Definition Line
+    begin: \s*(ForeignKey)\b 
+    end: \s*;\s*$
+    beginCaptures:
+      '1': { name: storage.type.source.isc.udl }
+    patterns:
+    - begin: \s\b
+      end: \s
+      patterns:
+      - {include: '#fk-type'}
+    - begin: \b((?i)References)\b
+      end: (?=\[|;|$)
+      beginCaptures: 
+        '1': {name: keyword.control.source.isc.udl}
+      patterns:
+      - {include: '#fk-type'}
+
+  fk-type:
+     match: '(\%|\b)([A-Za-z0-9]*)\(([A-Za-z\%][A-Za-z0-9]*)\)'
+     captures:
+       '1': {name: keyword.operator.source.isc.udl}
+       '2': {name: keyword.operator.source.isc.udl}
+       '3': {name: entity.name.source.isc.udl}
+
+  include-directive:
+    begin: ^\s*((?i)Include)\b
+    beginCaptures:
+      '1': {name: keyword.control.source.isc.udl}
+    comment: '#include directive'
+    end: $
+    patterns:
+    - {include: '#type-name-list'}
+    - {include: '#type-name'}
+  
+  #TODO: Explicit collation (e.g., "Index Idx on Field As Collation", or "... On (F1 As Collation1, F2 As Collation2)")
+  index-definition:
+    begin: ^\s*((?i)Index)\s+([A-Z-a-z%][A-Za-z0-9.]*)
+    beginCaptures:
+      '1': {name: storage.type.source.isc.udl}
+      '2': {name: entity.name.type.source.isc.udl}
+    comment: Index Definition Line
+    end: $
+    patterns:
+    - {include: '#member-attr-list'}
+    - {include: '#keyword-on'}
+    - {match: ;, name: keyword.operator.source.isc.udl}
+  keyword-as:
+    comment: As <type>
+    begin: \b((?i)As)\b
+    end: (?=\[|;|=|,|\)|$)
+    beginCaptures:
+      '1': {name: keyword.operator.source.isc.udl}
+    patterns:
+    - {include: '#type-attr-list'}
+    - {include: '#type-name'}
+  keyword-extends:
+    comment: Extends Classname
+    begin: \b((?i)Extends)\b
+    beginCaptures:
+      '1': {name: keyword.control.source.isc.udl}
+    end: (?=\[)|$
+    name: keyword.operator.source.isc.udl
+    patterns:
+    - {include: '#type-name-list'}
+    - {include: '#type-name'}
+  keyword-on:
+    begin: \b((?i)On)\b
+    beginCaptures:
+      '1': {name: keyword.operator.source.isc.udl}
+    comment: <index> On <field-list>
+    end: (?=\[|;)|$
+    patterns:
+    - {include: '#type-name-list'}
+    - {include: '#type-name'}
+    - comment: index on collection
+      match: \((KEYS)\)|\((ELEMENTS)\)
+      name: keyword.operator.source.isc.udl
+      captures: 
+        '1': {name: storage.modifier.source.isc.udl}
+        '2': {name: storage.modifier.source.isc.udl}
+
+  index-field:
+    comment: 
+  line-comment: 
+    comment: //comment
+    match: ^\s*//.*
+    name: comment.line.double-slash.source.isc.udl
+  member-attr:
+    begin: (\[|\G)
+    comment: attr=value
+    end: (,|\])
+    beginCaptures:
+        '1': {name: keyword.operator.source.isc.udl}
+    endCaptures:
+        '1': {name: keyword.operator.source.isc.udl}
+    patterns:
+    - begin: \s*(=)\s*
+      beginCaptures:
+        '1': {name: keyword.operator.source.isc.udl}
+      comment: attr value
+      end: (?=,|\s|\])|$
+      patterns:
+      - {include: '#value-string'}
+      - {include: '#value-literal'}
+      - {include: '#sql-expression'}
+      - {match: '[A-Za-z_][A-Za-z0-9_]+', name: entity.type.name.source.isc.udl}
+    - comment: attr name
+      match: \b[A-Za-z][A-Za-z0-9 ]+\b
+      name: storage.modifier.source.isc.udl
+  member-attr-list:
+    comment: [attr=value]
+    begin: (?=\[)
+    end: (?<=\])
+    patterns:
+    - {include: '#member-attr'}
+  member-name:
+    comment: <member name>
+    match: (\b|%)([A-Za-z][A-Za-z0-9]*)\b
+    name: entity.name.type.source.isc.udl
+  member-name-list:
+    begin: \(
+    comment: (<type1>,<type2>)
+    end: \)
+    name: keyword.operator.source.isc.udl
+    patterns:
+    - {include: '#member-name'}
+  method-block:
+    begin: \{
+    comment: Method Block
+    end: (?<=\})
+    patterns:
+    - {include: '#block-xml'}
+    - {include: '#block-sql'}
+    - {include: '#block-cos'}
+    - {include: '#block-js'}
+  method-definition:
+    patterns:
+    - {include: '#query-definition'}
+    - {include: '#clientmethod-definition'}
+    - {include: '#cosmethod-definition'}
+    - {include: '#xdata-definition'}
+  clientmethod-definition:
+    comment: ClientMethod Definition Line
+    begin: ^\s*((?i)ClientMethod)\b
+    end: (?<=\})
+    beginCaptures:
+      '1': {name: storage.type.source.isc.udl}
+    patterns:
+    - {include: '#generic-method-definition'}
+    - {include: '#block-js'}
+  query-definition:
+    comment: Query Definition Line
+    begin: ^\s*((?i)Query)\b
+    end: (?<=\})
+    beginCaptures:
+      '1': {name: storage.type.source.isc.udl}
+    patterns:
+    - {include: '#generic-method-definition'}
+    - {include: '#block-sql'}
+  cosmethod-definition:
+    comment: Method/ClassMethod Definition Line
+    begin: ^\s*((?i)ClassMethod|Method|Trigger)\b
+    end: (?<=\})
+    beginCaptures:
+      '1': {name: storage.type.source.isc.udl}
+    patterns:
+    - {include: '#generic-method-definition'}
+    - {include: '#block-cos'}
+  xdata-definition:
+    comment: ClientMethod Definition Line
+    begin: ^\s*((?i)XData)\b
+    end: (?<=\})
+    beginCaptures:
+      '1': {name: storage.type.source.isc.udl}
+    patterns:
+    - {include: '#xdata-definition-line'}
+    - {include: '#block-xml'}
+  xdata-definition-line:
+    begin: \G\s*([A-Za-z%][A-Za-z0-9]*)\s*
+    end: $
+    beginCaptures:
+      '1': {name: entity.name.type.source.isc.udl}
+    patterns:
+    - {include: '#member-attr-list'}
+
+  generic-method-definition:
+    comment: Generic Method Definition Line (name, parameters, return type and attributes)
+    #begin: ^\s*((?i)Method|Trigger|ClassMethod|ClientMethod|Query)\b
+    begin: \G\s*([A-Za-z%][A-Za-z0-9]*)\s*
+    end: $
+    beginCaptures:
+      '1': {name: entity.name.type.source.isc.udl}
+    patterns:
+    - {include: '#member-attr-list'}
+    - {include: '#method-parameter-list'}
+    - {include: '#keyword-as'}
+    #- {include: '#member-name'}
+  method-parameter:
+    begin: (\(|\G)
+    beginCaptures:
+      '1': {name: keyword.operator.source.isc.udl}
+    comment: <parm> As <type>=<value>
+    end: (\))|(,)
+    endCaptures:
+      '1': {name: keyword.operator.source.isc.udl}
+      '2': {name: keyword.operator.source.isc.udl}
+    patterns:
+    - {include: '#parameter-value'}
+    - {include: '#keyword-as'}
+    - {include: '#member-name'}
+  method-parameter-list:
+    begin: (?=\()
+    comment: method (<parms>,<parm>)
+    end: (?<=\))
+    patterns:
+    - {include: '#method-parameter'}
+  parameter-definition:
+    begin: ^\s*((?i)Parameter)\b
+    beginCaptures:
+      '1': {name: storage.type..source.isc.udl}
+    comment: Parameter Definition Line
+    end: $
+    patterns:
+    - {include: '#parameter-value'}
+    - {include: '#keyword-as'}
+    - {include: '#member-name'}
+    - {match: ;, name: keyword.operator.source.isc.udl}
+  parameter-value:
+    begin: (=)\s*
+    beginCaptures:
+      '1': {name: keyword.operator.source.isc.udl}
+    comment: <parm>=<value>
+    end: (?=,|;|\s|\))|$
+    patterns:
+    - {include: '#value-string'}
+    - {include: '#value-literal'}
+    - {include: '#value-expression'}
+  property-definition:
+    begin: ^\s*((?i)Property|Relationship)\b
+    beginCaptures:
+      '1': {name: storage.type.source.isc.udl}
+    comment: Property Definition Line
+    end: $
+    patterns:
+    - {include: '#member-attr-list'}
+    - {include: '#keyword-as'}
+    - {include: '#member-name'}
+    - {match: ;, name: keyword.operator.source.isc.udl}
+  
+  type-attr-list:
+    begin: \(
+    end: (?<=\))
+    name: keyword.operator.source.isc.udl
+    patterns:
+     - { include: '#type-attr'}
+  type-attr:
+    begin: ([A-Za-z]+)\s*((=)\s*)
+    end: \,|\)
+    beginCaptures:
+      '1': {name: storage.modifier.source.isc.udl}
+      '3': {name: keyword.operator.source.isc.udl}
+    patterns:
+      - { include: '#value-expression' }
+      - { include: '#value-string' }
+      - { include: '#value-literal' }
+      - { include: '#type-name' }
+  type-name: 
+    comment: <class name>
+    match: (\b|%)([A-Za-z][A-Za-z0-9.]*)\b
+    name: entity.name.type.source.isc.udl
+  type-name-list:
+    comment: (<type1>,<type2>)
+    begin: \s\(
+    end: \)
+    name: keyword.operator.source.isc.udl
+    patterns:
+    - {include: '#type-name'}
+
+  #TODO: actually implement coloring of expressions
+  sql-expression: 
+    comment: 'SQLComputeCode, RetrievalCode, etc.'
+    begin: \{
+    end: \}
+    patterns:
+    - match: \{\s*([A-Za-z_%][A-Za-z0-9_]*)\s*\}
+      captures: 
+       '1': {name: variable.source.isc.udl}
+    - {include: '#cos'}
+    #- {include: $self}
+  
+  value-expression: 
+    comment: '{<expression>}'
+    begin: \{
+    end: \}
+    patterns:
+    - {include: '#cos'}
+
+  #TODO: scientific notation? Other "non-standard" formats?
+  value-literal: 
+    comment: numeric constant
+    match: ([0-9]+\.?[0-9]*)|(\.[0-9]+)
+    name: constant.numeric.source.isc.udl
+
+  value-string: 
+    comment: quoted string
+    match: (\".*?\")+
+    name: string.quoted.double.source.isc.udl
+
+scopeName: source.source.isc.udl
+uuid: 12faaa2e-31d0-4e2c-8c31-a91770a45a8c
