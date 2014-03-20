@@ -15,12 +15,17 @@ class CDevException(Exception):
     def __str__(self):
         return "CDev Exception #{0}: {1}".format(self.code,self.desc)
 
+class Root:
+    def __init__(self, obj):
+        self.namespaces = obj['namespaces']
+
 class Namespace:
     def __init__(self, obj):
         self.id = obj['id']
         self.name = obj['name']
         self.files = obj['files']
         self.xml = obj['xml']
+        self.queries = obj['queries']
 
 class CodeEntity:
     def __init__(self, obj):
@@ -36,6 +41,10 @@ class File(CodeEntity):
         if 'xml' in obj: self.xml = obj['xml']
 
 class XML(CodeEntity):
+    def __init__(self, obj):
+        super().__init__(obj)
+
+class Query(CodeEntity):
     def __init__(self, obj):
         super().__init__(obj)
 
@@ -55,13 +64,29 @@ class XMLOperation(Operation):
         if 'xml' in obj: self.xml = XML(obj['xml'])
         if 'file' in obj: self.file = File(obj['file'])
 
+class QueryOperation(Operation):
+    def __init__(self, obj):
+        super().__init__(obj)
+        if 'result' in obj: self.result = obj['result']
+
 class CacheInstance:
     def __init__(self, host, web_server_port, username, password):
         self.host = host
         self.port = web_server_port
         self.username = username
         self.password = password
-        self.ROOTURL = '/csp/sys/dev/namespaces'
+
+        try: 
+            rootUrl = '/csp/sys/dev/'
+            data = self._request(rootUrl)
+        except Exception as e:
+            raise CDevException(44, "Cannot Connect to Server: {0}".format(e))
+        try:
+            root = Root(data)
+        except Exception as e:
+            raise CDevException(54, "Invalid Server Response: {0}".format(e))
+
+        self.namespaces = root.namespaces
 
     @property
     def url_prefix(self):
@@ -72,7 +97,7 @@ class CacheInstance:
         returns:
             [ Namespace ]
         """
-        namespaces = self._request(self.ROOTURL)
+        namespaces = self._request(self.namespaces)
         return [Namespace(namespace) for namespace in namespaces]
 
     # def get_namespace(self,name):
@@ -149,6 +174,12 @@ class CacheInstance:
         data = { 'content': content }
         result = self._request(namespace.xml, "PUT", data)
         return XMLOperation(result)
+
+    def run_query(self, namespace, query_text):
+        data = { 'action': 'execute', 'content': query_text }
+        result = self.request(namespace.queries, "POST", data)
+        return QueryOperation(result)
+
 
     def _request(self, url, method="GET", data=None):
         if data and hasattr(data,'__dict__'):
