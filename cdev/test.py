@@ -24,11 +24,12 @@ class TestCDEVServer(unittest.TestCase):
         ldap = self.instance.get_file(ldapfile)
         self.assertIn('LDAP', ldap.content)
 
-        person.content = '///modified by cdev\\r\\n{0}'.format(person.content)
+        person.content = '///modified by cdev\r\n{0}'.format(person.content)
+        print(person.content)
         putmodifiedpersonrequest = self.instance.put_file(person)
         self.assertTrue(putmodifiedpersonrequest.success)
 
-        ldap.content = '///modified by cdev\\r\\n{0}'.format(ldap.content)
+        ldap.content = '///modified by cdev\r\n{0}'.format(ldap.content)
         putmodifiedldaprequest = self.instance.put_file(ldap)
         self.assertTrue(putmodifiedldaprequest.success)
 
