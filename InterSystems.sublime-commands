@@ -32,6 +32,10 @@
         "command": "export_xml"
     },
     {
+        "caption": "Cache: Run SQL Query",
+        "command": "run_sql_query"
+    },
+    {
         "caption": "Cache: Server Configuration Settings",
         "command": "open_file",
         "args": {
@@ -52,4 +56,5 @@
             "files": "${packages}/User/InterSystemsCache.sublime-settings"
         }
     }
+
 ]

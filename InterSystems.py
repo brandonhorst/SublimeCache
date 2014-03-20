@@ -195,6 +195,34 @@ class OpenGeneratedFiles(sublime_plugin.TextCommand):
     def run(self, edit):
         threading.Thread(target=self.go).start()
 
+class RunSqlQuery(sublime_plugin.TextCommand):
+    def go(self, text):
+        result = current_instance().run_query(current_namespace(), text)
+        if result.success:
+            output = ""
+            for (key, value) in result.content.items():
+                output += value
+            view = sublime.active_window().new_file()
+            view.run_command('insert_text',{'text':output,'isClass': false, 'name': text})
+        else:
+            panel = view.window().show_panel("output")
+            panel.run_command('insert_text', {'text': result.errors, 'isClass': False, 'name': 'Compilation Results'})
+            return False 
+
+    def run_query(self, text):
+        threading.Thread(target=self.go, args=[text]).start()
+
+    def run(self, edit):
+        selection = self.view.sel()
+        if len(selection):
+            for region in selection:
+                text = self.view.substr(region)
+                self.run_query(text)
+        else:
+            text = sublime.Region(0, self.view.size())
+            self.run_query(text)
+
+
 class LoadXml(sublime_plugin.TextCommand):
     def go(self):
         self.text = self.view.substr(sublime.Region(0, self.view.size()))
