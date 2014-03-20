@@ -176,10 +176,9 @@ class CacheInstance:
         return XMLOperation(result)
 
     def run_query(self, namespace, query_text):
-        data = { 'action': 'execute', 'content': query_text }
+        data = { 'action': 'execute', 'sqltext': query_text }
         result = self.request(namespace.queries, "POST", data)
         return QueryOperation(result)
-
 
     def _request(self, url, method="GET", data=None):
         if data and hasattr(data,'__dict__'):
