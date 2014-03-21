@@ -67,7 +67,7 @@ class XMLOperation(Operation):
 class QueryOperation(Operation):
     def __init__(self, obj):
         super().__init__(obj)
-        if 'result' in obj: self.result = obj['result']
+        if 'content' in obj: self.content = obj['content']
 
 class CacheInstance:
     def __init__(self, host, web_server_port, username, password):
@@ -177,7 +177,7 @@ class CacheInstance:
 
     def run_query(self, namespace, query_text):
         data = { 'action': 'execute', 'sqltext': query_text }
-        result = self.request(namespace.queries, "POST", data)
+        result = self._request(namespace.queries, "POST", data)
         return QueryOperation(result)
 
     def _request(self, url, method="GET", data=None):
