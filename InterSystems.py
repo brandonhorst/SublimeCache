@@ -191,37 +191,58 @@ class OpenGeneratedFiles(sublime_plugin.TextCommand):
             file_stub = self.files[index]
             download_file(file_stub)
 
-
     def run(self, edit):
         threading.Thread(target=self.go).start()
 
+class ShowOutputPanel(sublime_plugin.ApplicationCommand):
+    def run(self, text):
+        window = sublime.active_window()
+        panel = window.create_output_panel('sql')
+        panel.run_command('insert_text', {'text': text, 'isClass': False, 'name': 'Compilation Results'})
+        window.run_command('show_panel', { 'panel': 'output.sql' })
+
+
 class RunSqlQuery(sublime_plugin.TextCommand):
+    def resultSetToString(content):
+        lines = ['|', '']
+        for (header, column) in content.items():
+            lines[0] += header
+
+            i = 2
+            for field in column:
+                if len(lines) <= i:
+                    lines.append('|')
+                lines[i] += field
+                i += 1
+            max_len = max([len(line) for line in lines])
+            lines = [line.ljust(max_len, ' ') + '|' for line in lines]
+            lines[1] = '=' * (max_len + 1)
+
+        lines.append('-' * len(lines[1]))
+        output = '\n'.join(lines)
+        return output
+
     def go(self, text):
-        result = current_instance().run_query(current_namespace(), text)
-        if result.success:
-            output = ""
-            for (key, value) in result.content.items():
-                output += value
+        addresult = current_instance().add_query(current_namespace(), text)
+        if addresult.success:
+            executeresult = current_instance().execute_query(result.query)
+            output = self.resultSetToString(executeresult.content)
+
             view = sublime.active_window().new_file()
-            view.run_command('insert_text',{'text':output,'isClass': false, 'name': text})
+            view.run_command('insert_text',{'text':output,'isClass': False, 'name': text})
         else:
-            panel = view.window().show_panel("output")
-            panel.run_command('insert_text', {'text': result.errors, 'isClass': False, 'name': 'Compilation Results'})
-            return False 
+            sublime.run_command('show_output_panel', { 'text': result.errors })
 
     def run_query(self, text):
         threading.Thread(target=self.go, args=[text]).start()
 
     def run(self, edit):
         selection = self.view.sel()
-        if len(selection):
-            for region in selection:
-                text = self.view.substr(region)
-                self.run_query(text)
-        else:
-            text = sublime.Region(0, self.view.size())
+        for region in selection:
+            if region.empty():
+                region = sublime.Region(0, self.view.size())
+            text = self.view.substr(region)
             self.run_query(text)
-
 
 class LoadXml(sublime_plugin.TextCommand):
     def go(self):
