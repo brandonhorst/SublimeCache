@@ -69,12 +69,8 @@ class XMLOperation(Operation):
 class QueryOperation(Operation):
     def __init__(self, obj):
         super().__init__(obj)
-<<<<<<< HEAD
-        if 'content' in obj: self.content = obj['content']
-=======
         if 'resultset' in obj: self.resultset = obj['resultset']
         if 'query' in obj: self.query = Query(obj['query'])
->>>>>>> dd25f416fb998ea58b604bbf333f2055080c3b76
 
 class CacheInstance:
     def __init__(self, host, web_server_port, username, password):
