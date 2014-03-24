@@ -7,11 +7,33 @@ import cdev
 class TestCDEVServer(unittest.TestCase):
     def setUp(self):
         self.instance = cdev.CacheInstance('bigfoot', 57776, '_SYSTEM', 'SYS')
-    def test_classes_and_routines(self):
+
+    def get_samples(self):
         namespaces = self.instance.get_namespaces()
         self.assertIn('SAMPLES', [namespace.name for namespace in namespaces]) 
 
         samples = [namespace for namespace in namespaces if namespace.name == 'SAMPLES'][0]
+        return samples
+
+    def test_namespaces(self):
+        self.get_samples()
+
+    def test_queries(self):
+        samples = self.get_samples()
+
+        sql = "SELECT Name, SSN FROM Sample.Person"
+        sqlresult = self.instance.add_query(samples, sql)
+        self.assertTrue(sqlresult.success)
+        self.assertIn(sql, sqlresult.query.content)
+
+        executeresult = self.instance.execute_query(sqlresult.query)
+        self.assertTrue(executeresult.success)
+        self.assertIn(sql, executeresult.query.content)
+        self.assertIn("Name", executeresult.resultset)
+
+    def test_classes_and_routines(self):
+        samples = self.get_samples()
+
         files = self.instance.get_files(samples)
         self.assertIn('Sample.Person.cls', [file.name for file in files])
         self.assertIn('LDAP.mac', [file.name for file in files])
@@ -25,7 +47,6 @@ class TestCDEVServer(unittest.TestCase):
         self.assertIn('LDAP', ldap.content)
 
         person.content = '///modified by cdev\r\n{0}'.format(person.content)
-        print(person.content)
         putmodifiedpersonrequest = self.instance.put_file(person)
         self.assertTrue(putmodifiedpersonrequest.success)
 
@@ -58,7 +79,7 @@ class TestCDEVServer(unittest.TestCase):
 
         personxmlresult = self.instance.put_xml(personxml)
         self.assertTrue(personxmlresult.success)
-        self.assertEquals(personxmlresult.file.name, "Sample.Person.cls")
+        self.assertEqual(personxmlresult.file.name, "Sample.Person.cls")
 
         anonxmlresult = self.instance.add_xml(samples, personxml.content)
         self.assertTrue(anonxmlresult.success)
