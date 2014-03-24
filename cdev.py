@@ -47,6 +47,8 @@ class XML(CodeEntity):
 class Query(CodeEntity):
     def __init__(self, obj):
         super().__init__(obj)
+        self.plan = obj['plan']
+        self.cached = obj['cached']
 
 class Operation:
     def __init__(self, obj):
@@ -67,7 +69,8 @@ class XMLOperation(Operation):
 class QueryOperation(Operation):
     def __init__(self, obj):
         super().__init__(obj)
-        if 'content' in obj: self.content = obj['content']
+        if 'resultset' in obj: self.resultset = obj['resultset']
+        if 'query' in obj: self.query = Query(obj['query'])
 
 class CacheInstance:
     def __init__(self, host, web_server_port, username, password):
@@ -175,10 +178,19 @@ class CacheInstance:
         result = self._request(namespace.xml, "PUT", data)
         return XMLOperation(result)
 
-    def run_query(self, namespace, query_text):
-        data = { 'action': 'execute', 'sqltext': query_text }
-        result = self._request(namespace.queries, "POST", data)
+    def add_query(self, namespace, text):
+        data = { 'content': text }
+        result = self._request(namespace.queries, "PUT", data)
         return QueryOperation(result)
+
+    def execute_query(self, query):
+        data = { 'action': 'execute' }
+        result = self._request(query.id, "POST", data)
+        return QueryOperation(result)
+
+    def get_query_plan(self, query):
+        result = self._request(query.plan)
+        return QueryOperation()
 
     def _request(self, url, method="GET", data=None):
         if data and hasattr(data,'__dict__'):
