@@ -49,20 +49,17 @@ def current_instance():
 
     return cdev.CacheInstance(**server)
 
-class InsertText(sublime_plugin.TextCommand):
-    def run(self, edit, text, isClass = False, name = None):
-        self.view.erase(edit, sublime.Region(0, self.view.size()))
-        self.view.insert(edit,0,text.replace("\r\n","\n"))
-        self.view.set_name(name)
-        self.view.set_syntax_file('Packages/InterSystems Cache/CacheColors/{0}.tmLanguage'.format("UDL" if isClass else "COS"))
-        self.view.set_scratch(True)
 
 def download_file(file_stub):
     file = current_instance().get_file(file_stub)
-    view = sublime.active_window().new_file()
-    isClass = file.name.endswith('.cls')
-    view.run_command('insert_text',{'text':file.content,'isClass': isClass, 'name': file.name})
-    view.settings().set('file',vars(file))
+    syntax_name = 'UDL' if file.name.endswith('.cls') else 'COS'
+    sublime.run_command('open_cache_code',
+        {
+            'text':file.content,
+            'syntax_name': syntax_name,
+            'name': file.name,
+            'file': vars(file)
+        })
 
 
 class DownloadClassOrRoutine(sublime_plugin.ApplicationCommand):
@@ -101,17 +98,20 @@ class UploadClassOrRoutine(sublime_plugin.ApplicationCommand):
             sublime.status_message("Compiled {0}".format(result.file.name))
             return True
         else:
-            panel = view.window().show_panel("output")
-            panel.run_command('insert_text', {'text': result.errors, 'isClass': False, 'name': 'Compilation Results'})
+            sublime.run_command('show_cache_errors', { 'errors': result.errors })
             return False
 
     def update(self,result):
         if result.success:
             success = self.compile(result.file)
             if success:
-                self.view.settings().set('file',vars(result.file))
-                isClass = result.file.name.endswith('.cls')
-                self.view.run_command('insert_text', {'text': result.file.content, 'isClass': isClass, 'name': result.file.name} )
+                syntax_name = 'UDL' if result.file.name.endswith('.cls') else 'COS'
+                self.view.run_command('write_cache_code',
+                    {
+                        'text': result.file.content,
+                        'syntax_name': syntax_name,
+                        'name': result.file.name
+                    })
 
     def take_name(self, name):
         if not x[-4] == '.':
@@ -126,19 +126,12 @@ class UploadClassOrRoutine(sublime_plugin.ApplicationCommand):
         self.view = sublime.active_window().active_view()
         self.text = self.view.substr(sublime.Region(0, self.view.size())).replace('\n','\r\n')
         
-        file_dict = self.view.settings().get('file', None)
-        if file_dict:
-            file = cdev.File(file_dict)
-            file.content = self.text
-            result = current_instance().put_file(file)
+        class_name = self.get_class_name()
+        if class_name:
+            result = current_instance().add_file(current_namespace(), class_name, self.text)
             self.update(result)
         else:
-            class_name = self.get_class_name()
-            if class_name:
-                result = current_instance().add_file(current_namespace(), class_name, self.text)
-                self.update(result)
-            else:
-                self.view.window().show_input_panel("Enter a name for this routine", "", self.take_name)
+            self.view.window().show_input_panel("Enter a name for this routine", "", self.take_name)
 
 class OpenInBrowser(sublime_plugin.TextCommand):
     def run(self, edit):
@@ -185,6 +178,8 @@ class OpenGeneratedFiles(sublime_plugin.TextCommand):
                 self.files = current_instance().get_generated_files(compile_result.file)
                 if len(self.files):
                     sublime.active_window().show_quick_panel([file.name for file in self.files], self.download)
+            else:
+                sublime.run_command('show_cache_errors', { 'errors': compile_result.errors })
 
     def download(self,index):
         if index >= 0:
@@ -194,16 +189,8 @@ class OpenGeneratedFiles(sublime_plugin.TextCommand):
     def run(self, edit):
         threading.Thread(target=self.go).start()
 
-class ShowOutputPanel(sublime_plugin.ApplicationCommand):
-    def run(self, text):
-        window = sublime.active_window()
-        panel = window.create_output_panel('sql')
-        panel.run_command('insert_text', {'text': text, 'isClass': False, 'name': 'Compilation Results'})
-        window.run_command('show_panel', { 'panel': 'output.sql' })
-
-
 class RunSqlQuery(sublime_plugin.TextCommand):
-    def resultSetToString(content):
+    def resultSetToString(self, content):
         lines = ['|', '']
         for (header, column) in content.items():
             lines[0] += header
@@ -225,13 +212,17 @@ class RunSqlQuery(sublime_plugin.TextCommand):
     def go(self, text):
         addresult = current_instance().add_query(current_namespace(), text)
         if addresult.success:
-            executeresult = current_instance().execute_query(result.query)
-            output = self.resultSetToString(executeresult.content)
-
-            view = sublime.active_window().new_file()
-            view.run_command('insert_text',{'text':output,'isClass': False, 'name': text})
+            executeresult = current_instance().execute_query(addresult.query)
+            if executeresult.success:
+                output = self.resultSetToString(executeresult.resultset)
+                sublime.run_command('open_cache_output', {
+                        'text': output,
+                        'name': text
+                    })
+            else:
+                sublime.run_command('show_cache_errors', { 'errors': executeresult.errors })
         else:
-            sublime.run_command('show_output_panel', { 'text': result.errors })
+            sublime.run_command('show_cache_errors', { 'errors': addresult.errors })
 
     def run_query(self, text):
         threading.Thread(target=self.go, args=[text]).start()
@@ -258,7 +249,55 @@ class ExportXml(sublime_plugin.TextCommand):
         file = get_file(self.view)
         if file:
             xml = current_instance().get_xml(file)
-            self.view.run_command('insert_text', { 'text':xml.content })
+
+            sublime.run_command('open_cache_code', {
+                    'text': xml.content,
+                    'syntax_name': "Export",
+                    'name': "{0} Export".format(file.name)
+                })
 
     def run(self, edit):
         threading.Thread(target=self.go).start()
+
+
+class ShowCacheErrors(sublime_plugin.ApplicationCommand):
+    def run(self, errors):
+        window = sublime.active_window()
+        panel = window.create_output_panel('InterSystems')
+        window.run_command('show_panel', { 'panel': 'output.InterSystems' })
+        panel.run_command('write_cache_error', { 'errortext': '\n'.join(errors) })
+
+class WriteCacheError(sublime_plugin.TextCommand):
+    def run(self, edit, errortext):
+        self.view.insert(edit, 0, errortext)
+
+class OpenCacheCode(sublime_plugin.ApplicationCommand):
+    def run(self, text, syntax_name, name, file = None):
+        window = sublime.active_window()
+        view = window.new_file()
+        view.run_command('write_cache_output',
+            {
+                'text': text,
+                'syntax_file': 'Packages/InterSystems Cache/CacheColors/{0}.tmLanguage'.format(syntax_name),
+                'name': name,
+                'file': file
+            })
+
+class OpenCacheOutput(sublime_plugin.ApplicationCommand):
+    def run(self, text, name):
+        window = sublime.active_window()
+        view = window.new_file()
+        view.run_command('write_cache_output', {
+                'text': text,
+                'name': name
+            })
+
+class WriteCacheOutput(sublime_plugin.TextCommand):
+    def run(self, edit, text, name, file = None, syntax_file = None):
+        self.view.erase(edit, sublime.Region(0, self.view.size()))
+        unix_text = text.replace('\r\n','\n')
+        self.view.insert(edit, 0, unix_text)
+        self.view.set_name(name)
+        self.view.set_scratch(True)
+        if syntax_file: self.view.set_syntax_file(syntax_file)
+        if file: self.view.settings().set('file', file)
