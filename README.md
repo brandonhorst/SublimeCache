@@ -1,6 +1,8 @@
 SublimeCache
 ============
 
+This plugin is no longer under active development. An Atom plugin is being developed at [UGroup/Atom-COS-Studio](https://github.com/UGroup/Atom-COS-Studio), maintained by @tsafin. If someone would like to take over this Sublime project, please let me know.
+
 Sublime Plugin for InterSystems Cache (uses https://github.com/brandonhorst/cdev-server)
 
 ##Functionality
